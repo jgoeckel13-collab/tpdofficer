@@ -442,11 +442,23 @@ async function sharePdf(text){try{const cs=selCopies(),files=cs.map(c=>new File(
 async function printIt(){const cs=selCopies();if(!cs.length)return needCopy();if(matchMedia('(pointer:coarse)').matches&&await sharePdf())return;
  const bytes=cs.length===1?cs[0].bytes:await mergePdfs(cs.map(c=>c.bytes)),url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),fr=document.createElement('iframe');
  fr.style.cssText='position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';fr.onload=()=>{try{fr.contentWindow.focus();fr.contentWindow.print()}catch{window.open(url,'_blank')}};fr.src=url;document.body.appendChild(fr);setTimeout(()=>{fr.remove();URL.revokeObjectURL(url)},180000)}
-async function emailIt(){const cs=selCopies();if(!cs.length)return needCopy();const em=result.sel.map(o=>o.email).filter(Boolean),to=em.join(', '),both=cs.length>1,
- subject='Completed form: '+dispName()+' ('+result.dt+')'+(cs.some(c=>c.key==='en')?' - English copy':''),body='Completed form "'+dispName()+'" signed on '+result.dt+'.'+(both?' Attached: the Portuguese original and the English copy.':'');
+async function pickOfficers(){return new Promise(res=>{const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px';
+ d.innerHTML='<div class="card" style="max-width:420px;width:100%;max-height:85vh;overflow:auto"><h3 style="margin-top:0">Email to</h3>'+officers.map((o,i)=>`<label class="chk"><input type="checkbox" class="po" value="${i}">${e(o.name)}${o.email?'':' (no email saved)'}</label>`).join('')+'<div class="row"><button class="alt" id="po-c">Cancel</button><button id="po-ok">Continue</button></div></div>';
+ document.body.appendChild(d);d.querySelector('#po-c').onclick=()=>{d.remove();res(null)};d.querySelector('#po-ok').onclick=()=>{const s=[...d.querySelectorAll('.po:checked')].map(c=>officers[+c.value]);d.remove();res(s)}})}
+function mkEml(to,ccs,subject,body,files){const bd='pd'+Date.now().toString(36),b64=u=>toB64(u).replace(/.{76}/g,'$&\r\n'),enc=s=>/^[\x20-\x7e]*$/.test(s)?s:'=?UTF-8?B?'+toB64(new TextEncoder().encode(s))+'?=';
+ let m='X-Unsent: 1\r\nTo: '+to+'\r\n'+(ccs?'Cc: '+ccs+'\r\n':'')+'Subject: '+enc(subject)+'\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="'+bd+'"\r\n\r\n--'+bd+'\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n'+b64(new TextEncoder().encode(body))+'\r\n';
+ for(const f of files){const nm=f.name.replace(/[^\x20-\x7e]/g,'_').replace(/"/g,'');m+='--'+bd+'\r\nContent-Type: application/pdf; name="'+nm+'"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename="'+nm+'"\r\n\r\n'+b64(f.bytes)+'\r\n'}
+ return m+'--'+bd+'--\r\n'}
+async function emailIt(){const cs=selCopies();if(!cs.length)return needCopy();
+ if(!result.sel.length&&officers.length){const s=await pickOfficers();if(s===null)return;result.sel=s}
+ const em=result.sel.map(o=>o.email).filter(Boolean),to=em.join(', '),both=cs.length>1,ccs=(typeof cc!=='undefined'&&cc)?cc:'',
+ subject='Completed form: '+dispName()+' ('+result.dt+')'+(cs.some(c=>c.key==='en')?' - English copy':''),body='Completed form "'+dispName()+'" dated '+result.dt+'.'+(both?' Attached: the Portuguese original and the English copy.':' The PDF is attached.');
  if(typeof canEmail!=='undefined'&&canEmail&&typeof api==='function'){try{await api('POST','email',{to:result.sel.map(o=>o.id),subject,text:body,pdfs:cs.map(c=>({filename:cName(c),pdf:toB64(c.bytes)}))});alert(LANG==='pt'?'E-mail enviado.':'Email sent.');return}catch(x){alert((LANG==='pt'?'Não foi possível enviar o e-mail: ':'Could not send the email: ')+x.message)}}
- if(await sharePdf((to?'To: '+to+'\n':'')+((typeof cc!=='undefined'&&cc)?'CC: '+cc+'\n':'')+subject+'\n'+body))return;
- await dl();location.href='mailto:'+em.join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body+'\n(Attach the downloaded PDF'+(both?'s':'')+'.)')+((typeof cc!=='undefined'&&cc)?'&cc='+encodeURIComponent(cc):'')}
+ if(matchMedia('(pointer:coarse)').matches){try{await navigator.clipboard.writeText(to)}catch{}
+  if(await sharePdf((to?'To: '+to+'\n':'')+(ccs?'CC: '+ccs+'\n':'')+subject+'\n'+body))return}
+ else{try{const eml=mkEml(to,ccs,subject,body,cs.map(c=>({name:cName(c),bytes:c.bytes}))),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([eml],{type:'message/rfc822'}));a.download=baseName()+'_email.eml';document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href)},4000);
+  alert('Your email draft was saved as a file. Open it (click it at the bottom of the browser or in Downloads) and it opens as a new message with the PDF attached'+(to?' and the officers in the To line.':'.'));return}catch(x){console.warn(x)}}
+ await dl();location.href='mailto:'+em.join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body+'\n(Attach the downloaded PDF'+(both?'s':'')+'.)')+(ccs?'&cc='+encodeURIComponent(ccs):'')}
 if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;let rl=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!rl&&view==='home'){rl=true;location.reload()}});navigator.serviceWorker.register('sw.js').catch(()=>{})}
 /* ---- English / Português ---- */
 let LANG='en';
