@@ -539,7 +539,7 @@ function tickClock(){const d=$('#cdate'),t=$('#ctime');if(!d||!t)return;const n=
  d.textContent=n.toLocaleDateString(loc,{weekday:'long',year:'numeric',month:'long',day:'numeric'});t.textContent=n.toLocaleTimeString(loc,{hour:'numeric',minute:'2-digit'})}
 setInterval(tickClock,1000);
 const STEPS=['Choose','Fill in','Review','Sign','Done'];
-const noSignForm=f=>/voucher/i.test((f&&f.name)||'');
+const noSignForm=f=>APP==='officer'&&/voucher|detail|inventory|lockout|trancad/i.test((f&&f.name)||'');
 const stepsHtml=(n,ns)=>`<div class="steps">${STEPS.filter(s=>!(ns&&s==='Sign')).map((s,i)=>`<div class="st ${i+1<n?'dn':i+1===n?'on':''}"><i>${i+1<n?'✓':i+1}</i>${s}</div>`).join('')}</div>`;
 let cdT=null,cdN=60;
 const cdText=n=>LANG==='pt'?'Reiniciando em '+n+' segundos':'Starting over in '+n+' seconds';
