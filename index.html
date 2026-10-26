@@ -79,7 +79,7 @@ async function dbDel(n){try{const d=await idb();d.transaction('forms','readwrite
 function go(v){if(v==='home'&&(view==='fill'||view==='review'||view==='sign'))clearDraft();if(v==='admin')v=APP==='officer'?'admin':!users.length?'setup':!session?'login':'admin';view=v;msg='';render()}
 function render(){
   const a=$('#app');
- if(view==='home'){a.innerHTML=`<div class="hero"><div class="seg"><button class="${LANG==='en'?'on':''}" onclick="setLang('en')">English</button><button class="${LANG==='pt'?'on':''}" onclick="setLang('pt')">Português</button></div><img src="${PATCH}" alt="Tisbury Police patch" style="display:block;margin:16px auto 8px;height:150px;max-width:100%;object-fit:contain"><h2>Welcome to the Tisbury Police Department</h2><p class="mut" style="font-size:17px;margin:0">Select the form you need to complete. An officer will assist you.</p><div class="clock"><span id="cdate"></span><b id="ctime"></b></div></div>${officerBar()}${resumeBanner()}<div class="cards">${formCards()}</div>`}
+ if(view==='home'){a.innerHTML=`<div class="hero"><div class="seg"><button class="${LANG==='en'?'on':''}" onclick="setLang('en')">English</button><button class="${LANG==='pt'?'on':''}" onclick="setLang('pt')">Português</button></div><img src="${PATCH}" alt="Tisbury Police patch" style="display:block;margin:16px auto 8px;height:150px;max-width:100%;object-fit:contain"><h2>Welcome to the Tisbury Police Department</h2><p class="mut" style="font-size:17px;margin:0">Select the form you need to complete. An officer will assist you.</p><div class="clock"><span id="cdate"></span><b id="ctime"></b></div></div>${officerBar()}${resumeBanner()}<div class="cards">${formCards()}</div>${recentHtml()}`}
  else if(view==='place'){a.innerHTML=`<div class="card"><h3 style="margin-top:0">Add signature box</h3><p class="mut">${e(forms[pl.i].name)} — drag on the page to draw where the signature goes.</p><label>Name of the box</label><input type="text" id="snm" value="Signature"><div class="row"><button class="alt sm" onclick="plPage(-1)">◀ Page</button><span id="plpg" class="mut"></span><button class="alt sm" onclick="plPage(1)">Page ▶</button></div><div id="plbox"></div><p id="amsg" style="color:#c0392b"></p><div class="row"><button class="alt" onclick="go('admin')">Cancel</button><button onclick="savePl()">Save signature box</button></div></div>`;drawPl()}else if(view==='setup'){a.innerHTML=setupHtml()}else if(view==='login'){a.innerHTML=loginHtml();}else if(view==='admin'){a.innerHTML=`${acctHtml()}${mapsCard()}<div class="card"><h3 style="margin-top:0">Forms (fillable PDFs)</h3>
  <label>Language of imported forms</label><select onchange="importLang=this.value"><option value="en" ${importLang==='en'?'selected':''}>English</option><option value="pt" ${importLang==='pt'?'selected':''}>Português</option></select><label>PDF files</label><input type="file" id="pf" accept="application/pdf,.pdf" multiple onchange="addForms(this.files)"><p id="imsg" class="mut"></p>
  ${forms.map((f,i)=>`<div class="li"><span>${e(f.name)} <span class="mut">${(f.lang||'en')==='pt'?'Português':'English'}${f.builtin?' · built in':''}</span></span>${f.builtin?'':`<span><button class="alt sm" onclick="placeSig(${i})">Add signature box</button> <button class="alt sm" onclick="delForm(${i})">Remove</button></span>`}</div>`).join('')}</div>
@@ -91,9 +91,9 @@ function render(){
  else if(view==='fill'){const t=e(cur.name.replace(/\.pdf$/i,''));
  if(listMode||!fields.length){a.innerHTML=`<div class="card"><h3 style="margin-top:0">${t}</h3>${pdfjsDoc?'<button class="alt sm" onclick="listMode=false;render()">Show form view</button>':''}
  ${fields.length?fields.map((f,i)=>fieldHtml(f,i)).join(''):'<p>This PDF has no fillable fields. Please ask staff to load a fillable version.</p>'}
- <div class="row"><button class="alt" onclick="go('home')">Cancel</button>${fields.length?'<button onclick="go(\'review\')">Next: Review</button>':''}</div></div>`;document.querySelectorAll('.lsig').forEach(c=>initPad(c))}
+ ${photoCard()}<div class="row"><button class="alt" onclick="go('home')">Cancel</button>${fields.length?'<button onclick="go(\'review\')">Next: Review</button>':''}</div></div>`;document.querySelectorAll('.lsig').forEach(c=>initPad(c))}
  else{a.innerHTML=`<div class="card" style="padding:10px"><div class="row" style="margin:0;justify-content:space-between"><b>${t}</b><span><button class="alt sm" onclick="setZoom(-.5)">−</button> <button class="alt sm" onclick="setZoom(.5)">＋</button> <button class="alt sm" onclick="listMode=true;render()">List view</button></span></div><p class="mut" style="margin:6px 0 0">Tap a highlighted box on the form to fill it in.</p></div>
- <div id="pages"></div><div class="card ed" id="ed"></div><div class="row" style="margin-bottom:14px"><button class="alt" onclick="go('home')">Cancel</button><button onclick="go('review')">Next: Review</button></div>`;
+ <div id="pages"></div><div class="card ed" id="ed"></div>${photoCard(1)}<div class="row" style="margin-bottom:14px"><button class="alt" onclick="go('home')">Cancel</button><button onclick="go('review')">Next: Review</button></div>`;
  drawPages().catch(()=>{listMode=true;render()})}}
  else if(view==='review'){a.innerHTML=`<div class="card"><h3 style="margin-top:0">Review your form</h3><p class="mut">Check that everything is correct before you sign.</p><div class="row" style="margin:0 0 8px"><button class="alt sm" onclick="rvZ(-.5)">−</button><button class="alt sm" onclick="rvZ(.5)">＋</button></div><div id="rvbox"><p class="mut" id="rvmsg">Preparing your copy…</p></div><p id="rverr" style="color:#c0392b"></p><div class="row"><button class="alt" onclick="go('fill')">Back to edit</button><button id="rvgo" onclick="${noSignForm(cur)?'finish()':'go(\'sign\')'}" disabled>${noSignForm(cur)?'Looks good — finish':'Looks good — continue to sign'}</button></div></div>`;showReview()}
  else if(view==='sign'){const today=isoToday();
@@ -109,7 +109,7 @@ function render(){
  const copiesUi=showEn?`<div class="copies"><label class="chk"><input type="checkbox" ${result.pick.main!==false?'checked':''} onchange="result.pick.main=this.checked"> Original (Portuguese)</label><label class="chk"><input type="checkbox" ${enc&&result.pick.en!==false?'checked':''} ${enc?'':'disabled'} onchange="result.pick.en=this.checked"> English copy</label>${en&&en.state==='working'?'<span class="mut">(preparing…)</span>':''}${en&&en.state==='failed'?'<span class="mut">(unavailable)</span> <button class="alt sm" onclick="retryEnglish()">Retry</button>':''}<p class="mut" style="margin:6px 0 0">An English copy is made automatically. Choose which copies to print, download or email.</p>${result.enWarn?'<p class="mut" style="margin:6px 0 0">Long text entries were copied as written because translation is not enabled.</p>':''}</div>`:(isPt?'<p class="mut" style="margin:0 0 14px">An English copy is not available for this form on this version.</p>':'');
  const tabs=enc?`<div class="seg" style="margin:10px 0 6px"><button class="pvt ${result.prev==='en'?'':'on'}" data-k="main" onclick="previewCopy('main')">Original</button><button class="pvt ${result.prev==='en'?'on':''}" data-k="en" onclick="previewCopy('en')">English</button></div>`:'';
  a.innerHTML=`<div class="card" style="text-align:center"><div class="check">✓</div><h2 style="margin:0 0 6px">Thank you — you’re all set</h2><p style="font-size:17px;margin:0 0 18px">Your form is complete. Please give it to the assisting officer, or print or email a copy.</p>${copiesUi}
- <div class="row" style="justify-content:center"><button class="big" onclick="printIt()">${touchDev?'🖨️ Print / Share':'🖨️ Print'}</button><button class="big" onclick="emailIt()">✉️ Email officer</button></div>
+ <div class="row" style="justify-content:center">${pdDoneBtns(touchDev)}${pdSelfBtn()}</div>
  <div class="row" style="justify-content:center;margin-top:14px"><button class="alt" onclick="dl()">Download</button><button class="alt" onclick="endVisit()">New visitor</button></div>
  <p class="mut" style="margin:14px 0 8px">${mailOn?'The signed PDF will be emailed to the assisting officer(s).':'Email opens the share sheet with the PDF attached; pick your mail app and the officer(s) listed in the note.'}</p>${tabs}
  ${/android/i.test(navigator.userAgent)?'<p class="mut">Preview is not available on this device. Use Print / Share to review the PDF.</p>':`<iframe id="pv" src="${prev.url}" style="height:45vh"></iframe>`}
@@ -160,7 +160,7 @@ function saveOff(i){if(!session)return go('admin');const n=$('#en').value.trim()
 function delOff(i){if(!session)return go('admin');editOff=-1;officers.splice(i,1);ls.set('officers',officers);render()}
 const WORKER='vendor/pdf.worker.min.mjs';
 let pdfjsDoc=null,af=0,zoom=1,listMode=false,ovs=[];
-async function openForm(i,restore){cur=forms[i];values=restore&&restore.values?restore.values:{};af=restore&&restore.af||0;zoom=1;listMode=!window.pdfjsLib;fields=[];
+async function openForm(i,restore){clearPhotos();cur=forms[i];values=restore&&restore.values?restore.values:{};af=restore&&restore.af||0;zoom=1;listMode=!window.pdfjsLib;fields=[];
  try{const d=await PDFDocument.load(cur.bytes.slice(0)),ctx=d.context,amap=new Map();
   d.getPages().forEach((pg,pi)=>{const an=pg.node.Annots();if(an)an.asArray().forEach(r=>{const dd=ctx.lookup(r);if(dd)amap.set(dd,pi)})});
   fields=d.getForm().getFields().map(f=>{const name=f.getName();let b=null;
@@ -294,6 +294,7 @@ async function buildImage(){fstage='render pages';if(!pdfjsDoc)throw new Error('
 async function assemble(r,sigPng,sel,dt,tm,pn,X){X=X||{cur,fields,values};const{doc,fnt,clean}=r;
  if(!r.sigDone){fstage='signatures';for(const f of X.fields){if(f.t!=='sig'||!X.values[f.name])continue;try{const tr=await trimSig(X.values[f.name]);if(!tr)continue;const im0=await doc.embedPng(tr);
   for(const w of f.widgets){const k=Math.min((w.w-4)/im0.width,(w.h-2)/im0.height),iw=im0.width*k,ih=im0.height*k;doc.getPage(w.p).drawImage(im0,{x:w.x+(w.w-iw)/2,y:w.y+(w.h-ih)/2,width:iw,height:ih})}}catch(x){console.warn(x)}}}
+ if(photos.length&&photoForm(X.cur)){fstage='photos';await addPhotoPages(doc)}
  if(noSignForm(X.cur)){fstage='save';return doc.save({useObjectStreams:false})}
  fstage='record page';const last=doc.getPage(doc.getPageCount()-1),{width,height}=last.getSize(),pg=doc.addPage([width,height]);
  const fb=await doc.embedFont(StandardFonts.HelveticaBold),img=await doc.embedPng(sigPng),pimg=await doc.embedPng(PATCH);pg.drawImage(pimg,{x:width-50-70,y:height-150,width:70,height:70*pimg.height/pimg.width});
@@ -318,7 +319,7 @@ async function finish(){
   if(!bytes)throw new Error(errs.join(' | '));
   freeResult();
   result={bytes,url:URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),sel,dt,tm,pn,name:cur.name.replace(/\.pdf$/i,''),lang:cur.lang||'en',pick:{main:true,en:true},prev:'main',snap:{form:cur.name.replace(/\.pdf$/i,''),fields:fields.map(f=>({name:f.name,t:f.t,v:values[f.name]})),dt,tm,pn,sigPng,officers:sel.map(o=>o.name)}};
-  clearDraft();result.copies=[{key:'main',bytes,url:result.url}];if(result.lang==='pt'){LANG='en';document.documentElement.lang='en';trTree(document.body,true)}go('done');maybeEnglish()
+  clearDraft();result.copies=[{key:'main',bytes,url:result.url}];recentSave(result);if(result.lang==='pt'){LANG='en';document.documentElement.lang='en';trTree(document.body,true)}go('done');maybeEnglish()
  }catch(x){console.error(x);if(btn){btn.disabled=false;btn.textContent='Finish'}msg='Could not finish: '+(x&&x.message?x.message:x);render2()}}
 function render2(){const m=$('#msg')||$('#rverr');if(m)m.textContent=msg}
 /* ---- Staff authentication (admin + staff accounts, stored on this device) ---- */
@@ -373,6 +374,20 @@ const baseName=()=>result.name.replace(/[^\w-]+/g,'_');
 const cName=c=>baseName()+(c.key==='en'?'_English_copy_':'_')+result.dt+'.pdf';
 const selCopies=()=>((result&&result.copies)||[]).filter(c=>c.bytes&&result.pick[c.key]!==false);
 const needCopy=()=>{alert(LANG==='pt'?'Selecione pelo menos uma cópia.':'Select at least one copy.')};
+/* ---- recent forms: kept on this device for 24 hours, then deleted (officer app) ---- */
+const RECENT_MS=24*3600*1000;let recent=[];
+const rdb=()=>new Promise((ok,no)=>{try{const q=indexedDB.open('pd_recent_'+APP,1);q.onupgradeneeded=()=>q.result.createObjectStore('f',{keyPath:'id'});q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)}catch(x){no(x)}});
+async function rtx(mode,fn){try{const d=await rdb();return await new Promise((ok,no)=>{const t=d.transaction('f',mode),r=fn(t.objectStore('f'));t.oncomplete=()=>{d.close();ok(r&&r.result)};t.onerror=()=>{d.close();no(t.error)}})}catch(x){console.warn(x)}}
+async function recentLoad(){if(APP!=='officer')return;const all=(await rtx('readonly',s=>s.getAll()))||[],now=Date.now(),dead=all.filter(x=>now-x.ts>=RECENT_MS);
+ if(dead.length)await rtx('readwrite',s=>{dead.forEach(x=>s.delete(x.id))});recent=all.filter(x=>now-x.ts<RECENT_MS).sort((a,b)=>b.ts-a.ts);if(view==='home')render()}
+async function recentSave(r){if(APP!=='officer'||!r)return;try{const m=r.copies.find(c=>c.key==='main'),en=r.copies.find(c=>c.key==='en');if(!m)return;if(!r.rid){r.rid='r'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);r.rts=Date.now()}
+ await rtx('readwrite',s=>s.put({id:r.rid,ts:r.rts,name:r.name,lang:r.lang,dt:r.dt,tm:r.tm,main:m.bytes,en:en?en.bytes:null}));await recentLoad()}catch(x){console.warn(x)}}
+function recentHtml(){if(APP!=='officer'||!recent.length)return'';const now=Date.now();
+ return`<div class="card" style="margin-top:16px"><h3 style="margin-top:0">Recent forms <span class="mut" style="font-weight:400;font-size:14px">· kept on this device for 24 hours</span></h3>${recent.map(x=>{const left=Math.max(0,RECENT_MS-(now-x.ts)),h=Math.floor(left/3600000),m=Math.floor(left%3600000/60000);
+ return`<div class="row" style="justify-content:space-between;align-items:center;margin:8px 0"><div><b>${e(x.lang==='pt'?enTitle(x.name):x.name)}</b>${x.lang==='pt'?' (PT)':''}<br><span class="mut">${e(new Date(x.ts).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))} · deleted in ${h}h ${m}m</span></div><div class="row"><button class="alt sm" onclick="recentOpen('${x.id}')">Open</button><button class="alt sm" onclick="recentDel('${x.id}')">Delete</button></div></div>`}).join('')}</div>`}
+function recentOpen(id){const x=recent.find(y=>y.id===id);if(!x)return;freeResult();const mk=b=>({bytes:b,url:URL.createObjectURL(new Blob([b],{type:'application/pdf'}))}),m=mk(x.main),copies=[{key:'main',...m}];if(x.en)copies.push({key:'en',...mk(x.en)});
+ result={bytes:x.main,url:m.url,sel:[],dt:x.dt,tm:x.tm,pn:'',name:x.name,lang:x.lang,pick:{main:true,en:true},prev:'main',copies,en:x.en?{state:'ready'}:null,rid:x.id,rts:x.ts};cur={name:x.name+'.pdf',lang:x.lang};go('done')}
+async function recentDel(id){await rtx('readwrite',s=>s.delete(id));await recentLoad()}
 function freeResult(){if(result)(result.copies||[]).forEach(c=>{try{URL.revokeObjectURL(c.url)}catch{}})}
 async function translateItems(items){
  if(srvTranslate)return (await api('POST','translate',{items})).items;
@@ -430,7 +445,7 @@ async function makeEnglishForm(pair){const r0=result,sn=r0.snap,src=builtinForms
  let r;try{r=await buildFilled(false,X)}catch(e){console.warn(e);r=await buildFilled(true,X)}
  return assemble(r,sn.sigPng,r0.sel,sn.dt,sn.tm,sn.pn,X)}
 function maybeEnglish(){const r=result;if(!r||r.lang!=='pt'||r.en)return;const pair=pairFor(r.name);if(!pair&&!canTr())return;r.en={state:'working'};if(view==='done')render();
- (pair?makeEnglishForm(pair):makeEnglish()).then(bytes=>{if(result!==r)return;r.copies.push({key:'en',bytes,url:URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}))});r.en={state:'ready'};if(view==='done')render()})
+ (pair?makeEnglishForm(pair):makeEnglish()).then(bytes=>{if(result!==r)return;r.copies.push({key:'en',bytes,url:URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}))});r.en={state:'ready'};recentSave(r);if(view==='done')render()})
  .catch(x=>{if(result!==r)return;console.warn(x);r.en={state:'failed',msg:String(x&&x.message?x.message:x)};if(view==='done')render()})}
 function retryEnglish(){if(result){result.en=null;maybeEnglish()}}
 function previewCopy(k){if(!result)return;result.prev=k;const c=result.copies.find(x=>x.key===k),f=$('#pv');if(c&&f)f.src=c.url;document.querySelectorAll('.pvt').forEach(b=>b.classList.toggle('on',b.dataset.k===k))}
@@ -442,6 +457,20 @@ async function sharePdf(text){try{const cs=selCopies(),files=cs.map(c=>new File(
 async function printIt(){const cs=selCopies();if(!cs.length)return needCopy();if(matchMedia('(pointer:coarse)').matches&&await sharePdf())return;
  const bytes=cs.length===1?cs[0].bytes:await mergePdfs(cs.map(c=>c.bytes)),url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),fr=document.createElement('iframe');
  fr.style.cssText='position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';fr.onload=()=>{try{fr.contentWindow.focus();fr.contentWindow.print()}catch{window.open(url,'_blank')}};fr.src=url;document.body.appendChild(fr);setTimeout(()=>{fr.remove();URL.revokeObjectURL(url)},180000)}
+/* ---- photos on the Motor Vehicle Inventory (officer side) ---- */
+let photos=[];
+const photoForm=f=>APP==='officer'&&/inventory/i.test((f&&f.name)||'');
+function photoInner(){return`<div class="row" style="gap:8px">${photos.map((p,i)=>`<div style="position:relative"><img src="${p.url}" alt="Photo ${i+1}" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid #ccd"><button class="alt sm" style="position:absolute;top:2px;right:2px;padding:2px 8px" onclick="rmPhoto(${i})">✕</button></div>`).join('')}</div>
+ <input type="file" id="phin" accept="image/*" multiple hidden onchange="addPhotos(this)"><div class="row"><button class="alt" onclick="document.getElementById('phin').click()">📷 Add photos</button><span class="mut">${photos.length} added (up to 12)</span></div>`}
+function photoCard(wrap){if(!cur||!photoForm(cur))return'';const inner=`<h4 style="margin:14px 0 4px">Vehicle photos</h4><p class="mut" style="margin:0 0 8px">Take or choose pictures of the vehicle and its contents. They are added to the end of the PDF.</p><div id="phbox">${photoInner()}</div>`;return wrap?`<div class="card">${inner}</div>`:inner}
+async function addPhotos(inp){const fl=[...inp.files];inp.value='';for(const f of fl){if(photos.length>=12)break;try{const bm=await createImageBitmap(f,{imageOrientation:'from-image'}),k=Math.min(1,1600/Math.max(bm.width,bm.height)),c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);if(bm.close)bm.close();
+ const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.8));photos.push({bytes:new Uint8Array(await blob.arrayBuffer()),url:URL.createObjectURL(blob)})}catch(x){console.warn(x);alert('Could not add '+f.name)}}const b=$('#phbox');if(b)b.innerHTML=photoInner()}
+function rmPhoto(i){const p=photos.splice(i,1)[0];if(p)URL.revokeObjectURL(p.url);const b=$('#phbox');if(b)b.innerHTML=photoInner()}
+function clearPhotos(){photos.forEach(p=>URL.revokeObjectURL(p.url));photos=[]}
+async function addPhotoPages(doc){const fb=await doc.embedFont(StandardFonts.HelveticaBold),ft=await doc.embedFont(StandardFonts.Helvetica),W=612,H=792,M=36,cw=(W-M*2-18)/2,ch=(H-M*2-30-18)/2,np=Math.ceil(photos.length/4);
+ for(let i=0;i<photos.length;i+=4){const pg=doc.addPage([W,H]);pg.drawText('Vehicle photos - Motor Vehicle Inventory ('+(i/4+1)+' of '+np+')',{x:M,y:H-M-12,size:12,font:fb});
+  for(let j=0;j<4&&i+j<photos.length;j++){const im=await doc.embedJpg(photos[i+j].bytes),k=Math.min(cw/im.width,(ch-14)/im.height),w=im.width*k,h=im.height*k,col=j%2,row=j>>1,top=H-M-30-row*(ch+18),x0=M+col*(cw+18);
+   pg.drawImage(im,{x:x0+(cw-w)/2,y:top-h,width:w,height:h});pg.drawText('Photo '+(i+j+1),{x:x0+(cw-w)/2,y:top-h-11,size:9,font:ft})}}}
 async function pickOfficers(){return new Promise(res=>{const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px';
  d.innerHTML='<div class="card" style="max-width:420px;width:100%;max-height:85vh;overflow:auto"><h3 style="margin-top:0">Email to</h3>'+officers.map((o,i)=>`<label class="chk"><input type="checkbox" class="po" value="${i}">${e(o.name)}${o.email?'':' (no email saved)'}</label>`).join('')+'<div class="row"><button class="alt" id="po-c">Cancel</button><button id="po-ok">Continue</button></div></div>';
  document.body.appendChild(d);d.querySelector('#po-c').onclick=()=>{d.remove();res(null)};d.querySelector('#po-ok').onclick=()=>{const s=[...d.querySelectorAll('.po:checked')].map(c=>officers[+c.value]);d.remove();res(s)}})}
@@ -459,6 +488,7 @@ async function emailIt(){const cs=selCopies();if(!cs.length)return needCopy();
  else{try{const eml=mkEml(to,ccs,subject,body,cs.map(c=>({name:cName(c),bytes:c.bytes}))),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([eml],{type:'message/rfc822'}));a.download=baseName()+'_email.eml';document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href)},4000);
   alert('Your email draft was saved as a file. Open it (click it at the bottom of the browser or in Downloads) and it opens as a new message with the PDF attached'+(to?' and the officers in the To line.':'.'));return}catch(x){console.warn(x)}}
  await dl();location.href='mailto:'+em.join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body+'\n(Attach the downloaded PDF'+(both?'s':'')+'.)')+(ccs?'&cc='+encodeURIComponent(ccs):'')}
+if(APP==='officer'){recentLoad();setInterval(recentLoad,300000)}
 if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;let rl=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!rl&&view==='home'){rl=true;location.reload()}});navigator.serviceWorker.register('sw.js').catch(()=>{})}
 /* ---- English / Português ---- */
 let LANG='en';
@@ -545,7 +575,7 @@ let cdT=null,cdN=60;
 const cdText=n=>LANG==='pt'?'Reiniciando em '+n+' segundos':'Starting over in '+n+' seconds';
 function startCd(){clearInterval(cdT);cdN=60;const tick=()=>{const el=$('#cd');if(!el||view!=='done'){clearInterval(cdT);return}el.textContent=cdText(cdN);if(cdN--<=0){if(result&&result.en&&result.en.state==='working'){cdN=15;return}clearInterval(cdT);endVisit()}};tick();cdT=setInterval(tick,1000)}
 ['pointerdown','keydown'].forEach(ev=>addEventListener(ev,()=>{if(view==='done')cdN=60}));
-function endVisit(){if(rvUrl){try{URL.revokeObjectURL(rvUrl)}catch{}rvUrl=null}clearInterval(cdT);if(result){freeResult();result=null}values={};cur=null;setLang('en',1)}
+function endVisit(){clearPhotos();if(rvUrl){try{URL.revokeObjectURL(rvUrl)}catch{}rvUrl=null}clearInterval(cdT);if(result){freeResult();result=null}values={};cur=null;setLang('en',1)}
 const homeForms=()=>{const l=forms.map((f,i)=>[f,i]).filter(([f])=>(f.lang||'en')===LANG);return l.length?l.map(([f,i])=>`<button class="formbtn" onclick="openForm(${i})">📄 ${e(f.name.replace(/\.pdf$/i,''))}</button>`).join(''):'<p class="mut">No forms loaded yet. Staff: tap “Staff setup” to import PDFs and add officers.</p>'};
 
 const PT={'Review':'Revisar','Review your form':'Revise o seu formulário','Check that everything is correct before you sign.':'Confira se tudo está correto antes de assinar.','Preparing your copy…':'Preparando a sua cópia…','Back to edit':'Voltar para editar','Looks good — continue to sign':'Tudo certo — continuar para assinar','Next: Review':'Próximo: Revisar','English translation is not enabled on this version.':'A tradução em inglês não está ativada nesta versão.','Original (Portuguese)':'Original (português)','English translation':'Tradução em inglês','(translating…)':'(traduzindo…)','(unavailable)':'(indisponível)','Retry':'Tentar novamente','Original':'Original','An English translation is made automatically. Choose which copies to print, download or email.':'Uma tradução em inglês é feita automaticamente. Escolha quais cópias imprimir, baixar ou enviar por e-mail.','Tisbury Police':'Polícia de Tisbury','Visitor Self-Service':'Autoatendimento do Visitante','Choose':'Escolher','Fill in':'Preencher','Sign':'Assinar','Done':'Concluído','Thank you — you’re all set':'Obrigado — tudo pronto','Your form is complete. Please give it to the assisting officer, or print or email a copy.':'Seu formulário está completo. Entregue-o ao policial que o atendeu, ou imprima ou envie uma cópia por e-mail.','🖨️ Print':'🖨️ Imprimir','🗓 Day':'🗓 Dia','🗓 Month':'🗓 Mês','🗓 Year':'🗓 Ano','Use:':'Usar:','📅 Date picker':'📅 Calendário','🕒 Time picker':'🕒 Relógio','Plain text':'Texto simples','Automatic: one year after the issue date.':'Automático: um ano após a data de emissão.','Tisbury Police — Visitor Self-Service':'Polícia de Tisbury — Autoatendimento do Visitante','Staff setup':'Configuração (equipe)',
@@ -568,5 +598,39 @@ function trTree(r,all){if(r.nodeType===3)return trText(r,all);const w=document.c
 new MutationObserver(ms=>{for(const m of ms)m.addedNodes.forEach(n=>trTree(n,false))}).observe(document.body,{childList:true,subtree:true});
 function setLang(l,home){LANG=l;document.documentElement.lang=l==='pt'?'pt-BR':'en';if(home)go('home');else render();trTree(document.body,true)}
 {const sm=document.querySelector('header small');if(sm)sm.textContent='Officer Portal'}
+
+/* ==== Step 5 additions (standalone version: no server, email opens on this device) ==== */
+const pdT2=(en,pt)=>LANG==='pt'?pt:en;
+const PD_NOREPLY='Do Not Reply <no-reply@no-reply.invalid>';
+function pdNote(id,t,ok){const g=document.getElementById(id);if(g){g.style.color=ok===false?'#c0392b':ok?'#0a8f4a':'';g.textContent=t}}
+function pdDoneBtns(touch){const has=result&&result.sel&&result.sel.some(o=>o.email);
+ const lbl=has?(touch?pdT2('🖨️ Print / Send to officer','🖨️ Imprimir / Enviar ao policial'):pdT2('🖨️ Print / Send to officer','🖨️ Imprimir / Enviar ao policial')):(touch?'🖨️ Print / Share':'🖨️ Print');
+ return`<button class="big" onclick="pdPrint()">${lbl}</button>${has?'':'<button class="big" onclick="emailIt()">✉️ Email officer</button>'}<p id="pdPs" style="flex-basis:100%;margin:4px 0 0;min-height:1.2em;font-weight:600"></p>`}
+function pdPrint(){const cs=selCopies();if(!cs.length)return needCopy();const offs=(result.sel||[]).filter(o=>o.email);
+ if(!offs.length)return printIt();
+ if(matchMedia('(pointer:coarse)').matches){emailIt();return} /* phone/tablet: one share sheet offers Print and Mail */
+ printIt();setTimeout(()=>{emailIt();pdNote('pdPs',pdT2('Email to ','E-mail para ')+offs.map(o=>o.name).join(', ')+pdT2(' is ready: open it and press Send.',' está pronto: abra-o e toque em Enviar.'),true)},800)}
+function pdSelfBtn(){return`<div id="pdSelf" style="flex-basis:100%;width:100%;box-sizing:border-box;margin-top:12px;padding:14px;border:1px solid var(--bd);border-radius:12px;text-align:left">
+  <label for="pdSe" style="font-weight:600">${pdT2('Want a copy? Enter your email (optional)','Quer uma cópia? Digite seu e-mail (opcional)')}</label>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><input type="email" id="pdSe" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="200" placeholder="name@example.com" style="flex:1;min-width:200px;margin:0" onkeydown="if(event.key==='Enter')pdSelfMail()">
+  <button id="pdSo" onclick="pdSelfMail()">${pdT2('📧 Send me a copy','📧 Enviar para mim')}</button></div>
+  <p class="mut" style="font-size:13px;margin:6px 0 0">${pdT2('Automatic message: replies are not received.','Mensagem automática: respostas não são recebidas.')}</p>
+  <p id="pdSm" style="min-height:1.2em;margin:4px 0 0;font-weight:600"></p></div>`}
+function pdSelfMail(){const cs=selCopies();if(!cs.length)return needCopy();const inp=$('#pdSe');if(!inp)return;const em=inp.value.trim();
+ if(!/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]{2,}$/.test(em)){pdNote('pdSm',pdT2('Enter a valid email address.','Digite um endereço de e-mail válido.'),false);inp.focus();return}
+ const pt=LANG==='pt',subject=(pt?'Sua cópia: ':'Your copy: ')+dispName()+' - Tisbury Police',
+  body=pt?'Em anexo está a cópia do formulário que você preencheu no Departamento de Polícia de Tisbury.\n\nEsta é uma mensagem automática. Respostas a este e-mail não são recebidas.'
+         :'Attached is a copy of the form you completed at the Tisbury Police Department.\n\nThis is an automated message. Replies to this email are not received.';
+ if(matchMedia('(pointer:coarse)').matches){try{navigator.clipboard.writeText(em)}catch{}
+  const files=cs.map(c=>new File([c.bytes],cName(c),{type:'application/pdf'}));
+  if(navigator.canShare&&navigator.canShare({files})){navigator.share({files,title:subject,text:'To: '+em+'\n'+subject+'\n'+body}).catch(()=>{});
+   pdNote('pdSm',pdT2('Pick your mail app. Your address was copied: paste it in the To line.','Escolha seu app de e-mail. Seu endereço foi copiado: cole-o no campo Para.'),true);return}}
+ try{let eml=mkEml(em,'',subject,body,cs.map(c=>({name:cName(c),bytes:c.bytes})));
+  eml=eml.replace('X-Unsent: 1\r\n','X-Unsent: 1\r\nReply-To: '+PD_NOREPLY+'\r\nAuto-Submitted: auto-generated\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([eml],{type:'message/rfc822'}));a.download=baseName()+'_copy.eml';document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href)},4000);
+  pdNote('pdSm',pdT2('Your email is ready (addressed to ','Seu e-mail está pronto (para ')+em+pdT2('). Open it and press Send.','). Abra-o e toque em Enviar.'),true)}
+ catch(x){pdNote('pdSm',pdT2('Could not create the email: ','Não foi possível criar o e-mail: ')+x.message,false)}}
+/* ==== end step 5 additions ==== */
+
 dbAll().then(r=>{const bn=new Set(BUILTIN.map(x=>x.name));forms=[...builtinForms(),...r.filter(x=>!bn.has(x.name))];render()});render();
 </script></body></html>
