@@ -620,7 +620,7 @@ function pdPrint(){const cs=selCopies();if(!cs.length)return needCopy();const of
    .catch(x=>pdNote('pdPs',pdT2('Printed, but the email to the officer failed: ','Impresso, mas o e-mail ao policial falhou: ')+x.message,false));return}
  if(matchMedia('(pointer:coarse)').matches){emailIt();return} /* phone/tablet: one share sheet offers Print and Mail */
  printIt();setTimeout(()=>{emailIt();pdNote('pdPs',pdT2('Email to ','E-mail para ')+offs.map(o=>o.name).join(', ')+pdT2(' is ready: open it and press Send.',' está pronto: abra-o e toque em Enviar.'),true)},800)}
-function pdSelfBtn(){return`<div id="pdSelf" style="flex-basis:100%;width:100%;box-sizing:border-box;margin-top:12px;padding:14px;border:1px solid var(--bd);border-radius:12px;text-align:left">
+function pdSelfBtn(){return''}function pdSelfBtnOld(){return`<div id="pdSelf" style="flex-basis:100%;width:100%;box-sizing:border-box;margin-top:12px;padding:14px;border:1px solid var(--bd);border-radius:12px;text-align:left">
   <label for="pdSe" style="font-weight:600">${pdT2('Want a copy? Enter your email (optional)','Quer uma cópia? Digite seu e-mail (opcional)')}</label>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><input type="email" id="pdSe" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="200" placeholder="name@example.com" style="flex:1;min-width:200px;margin:0" onkeydown="if(event.key==='Enter')pdSelfMail()">
   <button id="pdSo" onclick="pdSelfMail()">${pdT2('📧 Send me a copy','📧 Enviar para mim')}</button></div>
@@ -647,7 +647,7 @@ function pdSelfMail(){const cs=selCopies();if(!cs.length)return needCopy();const
 
 /* automatic email through a sending service (Google Apps Script or TPD Central server) */
 const pdSvc=()=>{const v=ls.get('mailsvc',{});return v&&v.url&&v.key?v:null};
-const pdSvcOn=()=>!!pdSvc()&&navigator.onLine;
+const pdSvcOn=()=>false; /* officer app: no automatic email, Email officer opens the device mail app */
 async function pdSend(payload){const v=pdSvc();if(!v)throw new Error('Email sending is not set up');
  const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),60000);
  try{const r=await fetch(v.url,{method:'POST',headers:{'content-type':'text/plain;charset=utf-8'},body:JSON.stringify({...payload,key:v.key}),signal:ctl.signal,redirect:'follow',credentials:'omit'});
@@ -655,7 +655,7 @@ async function pdSend(payload){const v=pdSvc();if(!v)throw new Error('Email send
   if(!d)throw new Error('No answer from the email service ('+r.status+')');if(d.error)throw new Error(d.error);if(!r.ok)throw new Error('Error '+r.status);return d}
  catch(x){if(x.name==='AbortError')throw new Error('The email service took too long');if(x instanceof TypeError)throw new Error('Could not reach the email service');throw x}
  finally{clearTimeout(t)}}
-function pdRelayCard(){const v=ls.get('mailsvc',{})||{};
+function pdRelayCard(){return''}function pdRelayCardOld(){const v=ls.get('mailsvc',{})||{};
  return`<div class="card" id="pdMail"><h3 style="margin-top:0">Email sending</h3>
  <p class="mut">Optional. With a sending service, <b>Print / Sent to officer</b> and <b>Want a copy?</b> send automatically. Without one, they open an email on this device instead. The address can be your Google Apps Script web app (ends in <code>/exec</code>) or your TPD Central server (ends in <code>/api/relay</code>).</p>
  <label>Sending service address</label><input type="url" id="svU" value="${e(v.url||'')}" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" autocapitalize="off">
