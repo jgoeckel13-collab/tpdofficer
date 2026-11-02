@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest"><title>Install check</title>
+<style>body{font:16px system-ui,sans-serif;margin:16px;line-height:1.4}h1{font-size:20px}.r{padding:8px 10px;border-radius:8px;margin:6px 0;background:#eee;word-break:break-word}.ok{background:#d9f2dd}.bad{background:#f8d7d7}.w{background:#fff1cc}button{font-size:18px;padding:12px 18px;margin:8px 0}</style></head><body>
+<h1>Install check</h1><p>Wait about 10 seconds, then take a screenshot of this whole page.</p>
+<div id="o"></div><button id="b" hidden>Install app</button><p><a href="./">Back to the app</a></p>
+<script>
+const o=document.getElementById('o');let n=0;
+function row(t,c){const d=document.createElement('div');d.className='r '+(c||'');d.textContent=t;o.appendChild(d)}
+let ev=null;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();ev=e;const b=document.getElementById('b');b.hidden=false;b.onclick=()=>ev.prompt();row('Chrome says this app CAN be installed (install event fired).','ok')});
+addEventListener('appinstalled',()=>row('Installed.','ok'));
+(async()=>{
+row('Address: '+location.href);
+row('Secure (https): '+window.isSecureContext,window.isSecureContext?'ok':'bad');
+row('Browser: '+navigator.userAgent);
+row('Opened as installed app: '+(matchMedia('(display-mode: standalone)').matches?'yes':'no'));
+try{const rs=await navigator.serviceWorker.getRegistrations();row('Service workers already registered here: '+rs.map(r=>r.scope+' ['+(r.active?r.active.state:'none')+']').join(', ')||'none',rs.length?'ok':'w')}catch(e){row('Service worker check failed: '+e.message,'bad')}
+try{const r=await navigator.serviceWorker.register('sw.js',{scope:'./'});await navigator.serviceWorker.ready;row('Service worker registered, scope '+r.scope,'ok');row('Service worker controlling this page: '+!!navigator.serviceWorker.controller+' (the first time it is no until reload)',navigator.serviceWorker.controller?'ok':'w')}catch(e){row('Service worker FAILED: '+e.message,'bad')}
+try{const r=await fetch('manifest.webmanifest',{cache:'no-store'});row('Manifest: HTTP '+r.status+', type '+r.headers.get('content-type'),r.ok?'ok':'bad');const m=await r.json();
+row('id='+m.id+'  start_url='+m.start_url+'  scope='+m.scope+'  display='+m.display);
+for(const i of m.icons||[]){try{const ir=await fetch(i.src,{cache:'no-store'});const bl=await ir.blob();const im=new Image();im.src=URL.createObjectURL(bl);await im.decode();row('Icon '+i.src+' ('+i.purpose+'): HTTP '+ir.status+', '+im.naturalWidth+'x'+im.naturalHeight+', '+bl.size+' bytes, '+bl.type,ir.ok&&im.naturalWidth>=192?'ok':'bad')}catch(e){row('Icon '+i.src+' FAILED: '+e.message,'bad')}}
+const s=await fetch(m.start_url,{cache:'no-store'});row('start_url '+m.start_url+': HTTP '+s.status,s.ok?'ok':'bad')}catch(e){row('Manifest FAILED: '+e.message,'bad')}
+try{const l=await navigator.getInstalledRelatedApps?.();row('Related apps already installed: '+(l?l.length:'unknown'))}catch(e){}
+setTimeout(()=>{if(!ev)row('No install event from Chrome after waiting. Chrome does not consider this page installable on this phone.','bad')},8000);
+})();
+</script></body></html>
