@@ -287,7 +287,7 @@ async function drawReview(tok){const box=$('#rvbox');if(!box||!rvBytes)return;bo
   catch(x){console.warn(x);box.innerHTML=''}}
  box.appendChild(rvFrame())}
 function rvZ(d){rvZoom=Math.max(1,Math.min(3,rvZoom+d));drawReview(rvTok)}
-async function showReview(){const tok=++rvTok;applyRules();rvZoom=1;
+async function showReview(){const tok=++rvTok;applyRules();stmtTime();rvZoom=1;
  try{const bytes=await buildReviewPdf();if(tok!==rvTok||view!=='review')return;rvBytes=bytes;if(rvUrl)URL.revokeObjectURL(rvUrl);rvUrl=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));await drawReview(tok);const g=$('#rvgo');if(g)g.disabled=false}
  catch(x){if(tok===rvTok&&view==='review'){const m=$('#rvmsg');if(m)m.textContent='';const e2=$('#rverr');if(e2)e2.textContent='Could not prepare the review: '+(x&&x.message?x.message:x);const g=$('#rvgo');if(g)g.disabled=false}}}
 function drawManual(doc,fnt,clean,X){X=X||{fields,values};for(const f of X.fields){const v=X.values[f.name];if(v===undefined||v===''||v===false||f.t==='sig')continue;
@@ -296,14 +296,20 @@ function drawManual(doc,fnt,clean,X){X=X||{fields,values};for(const f of X.field
   const t=clean(v,f.multi);let sz=Math.max(6,Math.min(11,w.h*.7));
   if(f.multi&&w.rules)mlDraw(pg,w,t,fnt);else if(f.multi){let ly=w.y+w.h-sz-2;for(const para of t.split('\n')){let line='';for(const word of para.split(' ')){const tr=line?line+' '+word:word;if(line&&fnt.widthOfTextAtSize(tr,sz)>w.w-4){pg.drawText(line,{x:w.x+2,y:ly,size:sz,font:fnt});ly-=sz*1.15;line=word}else line=tr}pg.drawText(line,{x:w.x+2,y:ly,size:sz,font:fnt});ly-=sz*1.15}}
   else{while(sz>5&&fnt.widthOfTextAtSize(t,sz)>w.w-4)sz-=.5;pg.drawText(t,{x:w.x+2,y:w.y+(w.h-sz)/2+sz*.15,size:sz,font:fnt})}}}}
+
+const AMPM=[{re:/^Voluntary Statement\.pdf$/i,f:'Time completed',am:[230.7,243.4],pm:[247.2,260.4],y:182.2},{re:/^Declaração Voluntária\.pdf$/i,f:'Hora de conclusão',am:[151,163.7],pm:[167.5,180.7],y:170.9}];
+function stmtTime(){const c=AMPM.find(c=>c.re.test(cur.name));if(!c)return;const f=fields.find(f=>f.name===c.f);if(!f)return;const d=new Date(),h=d.getHours();values[f.name]=((h%12)||12)+':'+String(d.getMinutes()).padStart(2,'0');values.__ampm=h<12?'am':'pm'}
+function ampmGeo(Xc,v){const c=AMPM.find(c=>c.re.test(Xc.name));if(!c||!v||!v.__ampm)return null;const r=c[v.__ampm];return{cx:(r[0]+r[1])/2,cy:c.y+5.3,rx:(r[1]-r[0])/2+1.8,ry:6}}
+function circleAmPm(doc,X){const g=ampmGeo(X.cur,X.values);if(!g)return;try{doc.getPage(0).drawEllipse({x:g.cx,y:g.cy,xScale:g.rx,yScale:g.ry,borderWidth:.9,borderColor:rgb(0,0,0)})}catch(e){console.warn(e)}}
+function ampmCanvas(x,SC,H,pi){if(pi!==0)return;const g=ampmGeo(cur,values);if(!g)return;x.save();x.strokeStyle='#000';x.lineWidth=.9*SC;x.beginPath();x.ellipse(g.cx*SC,(H-g.cy)*SC,g.rx*SC,g.ry*SC,0,0,Math.PI*2);x.stroke();x.restore()}
 async function buildFilled(manual,X){X=X||{cur,fields,values};fstage='load';const doc=await PDFDocument.load(X.cur.bytes.slice(0)),fnt=await doc.embedFont(StandardFonts.Helvetica),clean=mkClean(fnt);
- if(manual){fstage='draw text';drawManual(doc,fnt,clean,X);return{doc,fnt,clean}}
+ if(manual){fstage='draw text';drawManual(doc,fnt,clean,X);circleAmPm(doc,X);return{doc,fnt,clean}}
  const form=doc.getForm();fstage='fill';
  for(const f of form.getFields())if(f instanceof PDFSignature){try{form.removeField(f)}catch{}}
  const sigNames=new Set(X.fields.filter(x=>x.t==='sig').map(x=>x.name));
  for(const f of form.getFields()){const v=X.values[f.getName()];if(v===undefined||v===''||sigNames.has(f.getName()))continue;
   try{if(f instanceof PDFTextField){if(f.isMultiline()&&X.fields.some(q=>q.name===f.getName()&&q.multi&&q.widgets.some(w=>w.rules)))continue;let t=clean(v,f.isMultiline());const mx=f.getMaxLength();if(mx)t=t.slice(0,mx);f.setText(t)}else if(f instanceof PDFCheckBox)v?f.check():f.uncheck();else f.select(v)}catch{}}
- fstage='flatten';form.updateFieldAppearances(fnt);form.flatten();dropDeadAnnots(doc);X.fields.forEach(f=>{if(f.t!=='text'||!f.multi)return;const v=X.values[f.name];if(!v)return;f.widgets.forEach(w=>{if(w.rules)mlDraw(doc.getPage(w.p),w,clean(v,true),fnt)})});return{doc,fnt,clean}}
+ fstage='flatten';form.updateFieldAppearances(fnt);form.flatten();dropDeadAnnots(doc);X.fields.forEach(f=>{if(f.t!=='text'||!f.multi)return;const v=X.values[f.name];if(!v)return;f.widgets.forEach(w=>{if(w.rules)mlDraw(doc.getPage(w.p),w,clean(v,true),fnt)})});circleAmPm(doc,X);return{doc,fnt,clean}}
 function dropDeadAnnots(doc){try{doc.getPages().forEach(pg=>{const an=pg.node.Annots();if(!an)return;for(let i=an.size()-1;i>=0;i--){if(!doc.context.lookup(an.get(i)))an.remove(i)}})}catch(x){console.warn(x)}}
 async function buildImage(){fstage='render pages';if(!pdfjsDoc)throw new Error('no page renderer');const doc=await PDFDocument.create(),fnt=await doc.embedFont(StandardFonts.Helvetica),SC=2;
  for(let n=1;n<=pdfjsDoc.numPages;n++){const pg=await pdfjsDoc.getPage(n),v1=pg.getViewport({scale:1}),v=pg.getViewport({scale:SC}),c=document.createElement('canvas');c.width=v.width;c.height=v.height;
@@ -315,7 +321,7 @@ async function buildImage(){fstage='render pages';if(!pdfjsDoc)throw new Error('
    let sz=Math.max(6,Math.min(11,w.h*.7))*SC;const t=String(v0).replace(/\r/g,'');x.font=sz+'px Helvetica,Arial,sans-serif';
    if(f.multi&&w.rules){const z=mlSz(w)*SC;x.font=z+'px Helvetica,Arial,sans-serif';x.textBaseline='alphabetic';mlLines(w,t,q=>x.measureText(q).width/SC).forEach(l=>x.fillText(l.s,X+2*SC,(v1.height-l.y)*SC));x.textBaseline='middle'}else if(f.multi){x.textBaseline='top';let ly=Y+2*SC;for(const para of t.split('\n')){let line='';for(const word of para.split(' ')){const tr=line?line+' '+word:word;if(line&&x.measureText(tr).width>W-4*SC){x.fillText(line,X+2*SC,ly);ly+=sz*1.15;line=word}else line=tr}x.fillText(line,X+2*SC,ly);ly+=sz*1.15}x.textBaseline='middle'}
    else{const one=t.replace(/\n/g,' ');while(sz>5*SC&&x.measureText(one).width>W-4*SC){sz-=SC*.5;x.font=sz+'px Helvetica,Arial,sans-serif'}x.fillText(one,X+2*SC,Y+H/2)}}
-  const jpg=await doc.embedJpg(c.toDataURL('image/jpeg',.92)),p=doc.addPage([v1.width,v1.height]);p.drawImage(jpg,{x:0,y:0,width:v1.width,height:v1.height})}
+  ampmCanvas(x,SC,v1.height,n-1);const jpg=await doc.embedJpg(c.toDataURL('image/jpeg',.92)),p=doc.addPage([v1.width,v1.height]);p.drawImage(jpg,{x:0,y:0,width:v1.width,height:v1.height})}
  return{doc,fnt,clean:mkClean(fnt),sigDone:true}}
 async function assemble(r,sigPng,sel,dt,tm,pn,X){X=X||{cur,fields,values};const{doc,fnt,clean}=r;
  if(!r.sigDone){fstage='signatures';for(const f of X.fields){if(f.t!=='sig'||!X.values[f.name])continue;try{const tr=await trimSig(X.values[f.name]);if(!tr)continue;const im0=await doc.embedPng(tr);
