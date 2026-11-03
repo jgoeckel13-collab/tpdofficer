@@ -77,7 +77,7 @@ const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('recep_'+APP,1);r.o
 async function dbAll(){try{const d=await idb();return await new Promise(r=>{const q=d.transaction('forms').objectStore('forms').getAll();q.onsuccess=()=>r(q.result);q.onerror=()=>r([])})}catch{return[]}}
 async function dbPut(o){try{const d=await idb();d.transaction('forms','readwrite').objectStore('forms').put(o)}catch{}}
 async function dbDel(n){try{const d=await idb();d.transaction('forms','readwrite').objectStore('forms').delete(n)}catch{}}
-function go(v){if(v==='home'&&(view==='fill'||view==='review'||view==='sign'))clearDraft();if(v==='admin')v=APP==='officer'?'admin':!users.length?'setup':!session?'login':'admin';view=v;msg='';render()}
+function go(v){if(v==='home'&&(view==='fill'||view==='review'||view==='sign'))clearDraft();if(v==='admin')v=APP==='officer'?'admin':!users.length?'setup':!session?'login':'admin';view=v;msg='';render();if(LANG==='pt')trTree(document.body,true)}
 function render(){
   const a=$('#app');
  if(view==='home'){a.innerHTML=`<div class="hero"><div class="seg"><button class="${LANG==='en'?'on':''}" onclick="setLang('en')">English</button><button class="${LANG==='pt'?'on':''}" onclick="setLang('pt')">Português</button></div><img src="${PATCH}" alt="Tisbury Police patch" style="display:block;margin:16px auto 8px;height:150px;max-width:100%;object-fit:contain"><h2>Welcome to the Tisbury Police Department</h2><p class="mut" style="font-size:17px;margin:0">Select the form you need to complete. An officer will assist you.</p><div class="clock"><span id="cdate"></span><b id="ctime"></b></div></div>${officerBar()}${resumeBanner()}<div class="cards">${formCards()}</div>${recentHtml()}`}
@@ -597,7 +597,7 @@ const PT={'Review':'Revisar','Review your form':'Revise o seu formulário','Chec
 'Email opens the share sheet with the PDF attached; pick your mail app and the officer(s) listed in the note.':'O e-mail abre o menu de compartilhamento com o PDF anexado; escolha seu aplicativo de e-mail e o(s) policial(is) indicado(s) na nota.'};
 const tr=s=>{if(LANG!=='pt')return s;if(PT[s]!==undefined)return PT[s];let m=/^(\d+) of (\d+)$/.exec(s);if(m)return m[1]+' de '+m[2];if(s.startsWith('Could not finish: '))return'Não foi possível concluir: '+s.slice(18);return s};
 const origTxt=new WeakMap();
-function trText(n,all){const raw=n.data,cur=raw.trim();if(!cur)return;const p=n.parentNode;
+function trText(n,all){const raw=n.data,cur=raw.trim();if(!cur)return;if(/^(admin|setup|login|place)$/.test(view)){if(all&&origTxt.has(n)){const o=origTxt.get(n);if(o!==cur)n.data=raw.replace(cur,o)}return}const p=n.parentNode;
  if(p&&p.closest&&(p.closest('textarea,option,.fo')&&!(p.closest('.fo')&&cur==='✍ Sign here')||p.closest('#ed .chk')&&0)){return}
  const en=all&&origTxt.has(n)?origTxt.get(n):cur;origTxt.set(n,en);const t=tr(en);if(t!==cur)n.data=raw.replace(cur,t)}
 function trTree(r,all){if(r.nodeType===3)return trText(r,all);const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode())trText(n,all)}
