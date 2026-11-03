@@ -117,10 +117,13 @@ function render(){
  <p class="cd" id="cd"></p></div>`;startCd()}
  const ns=cur&&noSignForm(cur)&&view!=='home',sn={home:1,fill:2,review:3,sign:4,done:ns?4:5}[view];if(sn)a.insertAdjacentHTML('afterbegin',stepsHtml(sn,ns));if(view==='home')tickClock();
 }
+const isRankField=f=>APP==='officer'&&f.t==='text'&&!f.kind&&/(^|[^a-z])rank([^a-z]|$)/i.test(f.name);
+function rankOpts(f){const cur=values[f.name]||'',L=['Patrolman','Sergeant','Detective'];if(cur&&!L.includes(cur))L.push(cur);return'<option value="">—</option>'+L.map(o=>`<option ${cur===o?'selected':''}>${e(o)}</option>`).join('')}
 const isOffField=f=>APP==='officer'&&f.t==='text'&&!f.kind&&officers.length&&/officer|(^|[^a-z])oic([^a-z]|$)/i.test(f.name)&&!/sign|supervis|requested|^\s*#/i.test(f.name);
 function offOpts(f){const cur=values[f.name]||'';return'<option value="">—</option>'+officers.map(o=>`<option ${cur===o.name?'selected':''}>${e(o.name)}</option>`).join('')}
 function fieldHtml(f,i){const n=e(f.name),l=`<label>${n}</label>`;
- if(isOffField(f))return`${l}<select onchange="values[fields[${i}].name]=this.value;document.getElementById('ot${i}').value=this.value">${offOpts(f)}</select><label class="mut">Or type a name</label><input type="text" id="ot${i}" value="${e(values[f.name]||'')}" oninput="values[fields[${i}].name]=this.value">`;
+ if(isRankField(f))return`${l}<select onchange="values[fields[${i}].name]=this.value">${rankOpts(f)}</select>`;
+  if(isOffField(f))return`${l}<select onchange="values[fields[${i}].name]=this.value;document.getElementById('ot${i}').value=this.value">${offOpts(f)}</select><label class="mut">Or type a name</label><input type="text" id="ot${i}" value="${e(values[f.name]||'')}" oninput="values[fields[${i}].name]=this.value">`;
  if(f.t==='sig')return`<div><label>${n}</label><canvas class="lsig" data-n="${n}" width="700" height="200" style="height:110px"></canvas><div class="row"><button class="alt sm" onclick="clrPad(this.closest('div').parentNode.querySelector('canvas'))">Clear</button></div></div>`;if(f.t==='check')return`<label class="chk"><input type="checkbox" ${values[f.name]?'checked':''} onchange="values[fields[${i}].name]=this.checked">${n}</label>`;
  if(f.t==='sel')return`${l}<select onchange="values[fields[${i}].name]=this.value"><option value="">—</option>${f.opts.map(o=>`<option ${values[f.name]===o?'selected':''}>${e(o)}</option>`).join('')}</select>`;
  if(f.t==='radio')return`${l}${f.opts.map(o=>`<label class="chk"><input type="radio" name="r${i}" ${values[f.name]===o?'checked':''} onchange="values[fields[${i}].name]='${e(o).replace(/\\/g,'\\\\')}'">${e(o)}</label>`).join('')}`;
@@ -181,13 +184,30 @@ async function openForm(i,restore){clearPhotos();cur=forms[i];values=restore&&re
  if(!listMode){try{if(pdfjsDoc){try{await pdfjsDoc.destroy()}catch{}}pdfjsDoc=null;pdfjsLib.GlobalWorkerOptions.workerSrc=WORKER;pdfjsDoc=await pdfjsLib.getDocument({data:new Uint8Array(cur.bytes.slice(0))}).promise}catch(x){listMode=true;pdfjsDoc=null}}
  for(const f of fields)if(SK[f.kind]&&!values[f.name])values[f.name]=nowVal(f.kind);values0=JSON.stringify(values);
  go('fill')}
+
+function mlSz(w){return Math.min(11,w.pitch*.82)}
+function mlLines(w,t,meas){const out=[],lim=w.w-4;for(const para of String(t).replace(/\r/g,'').split('\n')){let line='';for(let word of para.split(' ')){if(line&&meas(line+' '+word)>lim){out.push(line);line=''}
+ while(word.length>1&&meas(word)>lim){let k=word.length-1;while(k>1&&meas(word.slice(0,k))>lim)k--;if(line){out.push(line);line=''}out.push(word.slice(0,k));word=word.slice(k)}
+ line=line?line+' '+word:word}out.push(line)}
+ const base=w.rules.map(r=>r+2.2);while(base.length<out.length)base.push(base[base.length-1]-w.pitch);return out.map((s,i)=>({s,y:base[i]}))}
+function mlDraw(pg,w,t,fnt){const sz=mlSz(w);mlLines(w,t,s=>fnt.widthOfTextAtSize(s,sz)).forEach(l=>{if(l.s)pg.drawText(l.s,{x:w.x+2,y:l.y,size:sz,font:fnt})})}
+async function findRules(pg,v1,pi){const ws=[];fields.forEach(f=>{if(f.t==='text'&&f.multi)f.widgets.forEach(w=>{if(w.p===pi&&!w.rd)ws.push(w)})});if(!ws.length)return;
+ try{const S=2,v=pg.getViewport({scale:S}),c=document.createElement('canvas');c.width=v.width;c.height=v.height;const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:x,viewport:v}).promise;
+  for(const w of ws){w.rd=1;const x0=Math.round((w.x+3)*S),x1=Math.round((w.x+w.w-3)*S),y0=Math.max(0,Math.round((v1.height-w.y-w.h)*S)),y1=Math.min(c.height,Math.round((v1.height-w.y)*S));if(x1-x0<20||y1<=y0)continue;
+   const n=x1-x0,d=x.getImageData(x0,y0,n,y1-y0).data,rows=[];
+   for(let r=0;r<y1-y0;r++){let k=0;for(let i=0;i<n;i++){const o=(r*n+i)*4;if(d[o]+d[o+1]+d[o+2]<645)k++}rows.push(k/n>.85)}
+   const ys=[];for(let r=0;r<rows.length;){if(!rows[r]){r++;continue}let e=r;while(e+1<rows.length&&rows[e+1])e++;ys.push((r+e)/2);r=e+1}
+   const py=ys.map(r=>v1.height-(y0+r+.5)/S);if(py.length<3)continue;
+   const avg=(py[0]-py[py.length-1])/(py.length-1),gaps=[];for(let i=1;i<py.length;i++)gaps.push(py[i-1]-py[i]);
+   if(avg<8||avg>30||gaps.some(g=>g<avg*.6||g>avg*1.5))continue;w.rules=py;w.pitch=avg}}catch(e){console.warn(e)}}
 async function drawPages(){const box=$('#pages');if(!box||!pdfjsDoc)return;box.innerHTML='';ovs=[];const W=box.clientWidth||360;
  for(let n=1;n<=pdfjsDoc.numPages;n++){const pg=await pdfjsDoc.getPage(n),v1=pg.getViewport({scale:1}),cssW=W*zoom,sc=cssW/v1.width,dpr=Math.min(window.devicePixelRatio||1,2),v=pg.getViewport({scale:sc*dpr});
   const wrap=document.createElement('div');wrap.className='pg';wrap.style.width=cssW+'px';wrap.style.height=v1.height*sc+'px';
   const c=document.createElement('canvas');c.width=v.width;c.height=v.height;c.style.width=cssW+'px';c.style.height=v1.height*sc+'px';wrap.appendChild(c);box.appendChild(wrap);
-  await pg.render({canvasContext:c.getContext('2d'),viewport:v}).promise;
+  await pg.render({canvasContext:c.getContext('2d'),viewport:v}).promise;await findRules(pg,v1,n-1);
   fields.forEach((f,fi)=>f.widgets.forEach(w=>{if(w.p!==n-1)return;const el=document.createElement('div');el.className='fo';
    el.style.cssText=`left:${w.x*sc}px;top:${(v1.height-w.y-w.h)*sc}px;width:${w.w*sc}px;height:${w.h*sc}px;font-size:${Math.max(8,Math.min(w.h*sc*.65,14))}px`;
+   if(f.multi&&f.t==='text'&&w.rules){const F=mlSz(w)*sc,L=w.pitch*sc,off=(w.y+w.h-w.rules[0])*sc,bo=(L-1.117*F)/2+.905*F;el.style.fontSize=F+'px';el.style.lineHeight=L+'px';el.style.padding=Math.max(0,off-2.2*sc-bo)+'px 3px 0 3px'}
    el.onclick=()=>pick(fi,w);wrap.appendChild(el);ovs.push({el,fi,w})}))}
  paint();{const ae=document.activeElement;if(!(ae&&ae.closest&&ae.closest('#ed')))edit()}}
 function paint(){applyRules();ovs.forEach(({el,fi,w})=>{const f=fields[fi],v=values[f.name];let t='',done=false;
@@ -200,7 +220,7 @@ function edit(foc){const el=$('#ed');if(!el||!fields.length)return;const f=field
  else if(f.t==='sig')c=`<label>${n}</label><canvas id="fsig" data-n="${n}" width="700" height="200" style="height:120px"></canvas><div class="row"><button class="alt sm" onclick="clrPad($('#fsig'))">Clear</button></div>`;else if(f.t==='sel')c=`<label>${n}</label><select id="edv" onchange="values[fields[af].name]=this.value;paint()"><option value="">—</option>${f.opts.map(o=>`<option ${values[f.name]===o?'selected':''}>${e(o)}</option>`).join('')}</select>`;
  else if(f.t==='radio')c=`<label>${n}</label>${f.opts.map(o=>`<label class="chk"><input type="radio" name="edr" value="${e(o)}" ${values[f.name]===o?'checked':''} onchange="values[fields[af].name]=this.value;paint()">${e(o)}</label>`).join('')}`;
  else if(SK[f.kind])c=`<label>${n}</label><select id="edv" onchange="setDate(this.value)"><option value="">—</option>${selOpts(f.kind).map(o=>`<option ${values[f.name]===o?'selected':''}>${o}</option>`).join('')}</select><div class="row"><button class="alt sm" onclick="setDate(nowVal(fields[af].kind));edit()">Today</button><button class="alt sm" onclick="setDate('');edit()">Clear</button></div>`;else if(f.kind)c=`<label>${n}</label><input id="edv" type="${KT[f.kind]}" value="${toKind(f.kind,values[f.name]||'')}" onclick="try{this.showPicker()}catch{}" onchange="setDate(this.value)" ${f.auto?'disabled':''}>${f.auto?'<p class="mut">Automatic: one year after the issue date.</p>':''}<div class="row" ${f.auto?'hidden':''}><button class="alt sm" onclick="setDate(nowVal(fields[af].kind));edit()">${f.kind==='date'?'Today':'Now'}</button><button class="alt sm" onclick="setDate('');edit()">Clear</button></div>`;else if(f.multi)c=`<label>${n}</label><textarea id="edv" rows="3" oninput="values[fields[af].name]=this.value;paint()">${e(values[f.name]||'')}</textarea>`;
- else if(isOffField(f))c=`<label>${n}</label><select id="edv" onchange="values[fields[af].name]=this.value;paint();edit()">${offOpts(f)}</select><label class="mut" style="margin-top:6px">Or type a name</label><input type="text" id="edt" value="${e(values[f.name]||'')}" oninput="values[fields[af].name]=this.value;paint()">`;
+ else if(isRankField(f))c=`<label>${n}</label><select id="edv" onchange="values[fields[af].name]=this.value;paint();edit()">${rankOpts(f)}</select>`;  else if(isOffField(f))c=`<label>${n}</label><select id="edv" onchange="values[fields[af].name]=this.value;paint();edit()">${offOpts(f)}</select><label class="mut" style="margin-top:6px">Or type a name</label><input type="text" id="edt" value="${e(values[f.name]||'')}" oninput="values[fields[af].name]=this.value;paint()">`;
  else c=`<label>${n}</label><input id="edv" type="text" value="${e(values[f.name]||'')}" oninput="values[fields[af].name]=this.value;paint()" onkeydown="if(event.key==='Enter')stepF(1)">${locBtns(f)}`;
  el.innerHTML=c+`<div class="row"><button class="alt sm" onclick="stepF(-1)">◀ Prev</button><button class="sm" onclick="stepF(1)">Next ▶</button><span class="mut">${af+1} of ${fields.length}</span></div>`;
  if(f.t==='sig')initPad($('#fsig'));if(foc)setTimeout(()=>{const x=$('#edv');if(x)x.focus()},0)}
@@ -273,7 +293,7 @@ function drawManual(doc,fnt,clean,X){X=X||{fields,values};for(const f of X.field
  for(const w of f.widgets){const pg=doc.getPage(w.p);
   if(f.t==='check'||f.t==='radio'){if(f.t==='check'||v===w.o)pg.drawText('X',{x:w.x+w.w*.2,y:w.y+w.h*.15,size:Math.max(6,w.h*.8),font:fnt});continue}
   const t=clean(v,f.multi);let sz=Math.max(6,Math.min(11,w.h*.7));
-  if(f.multi){let ly=w.y+w.h-sz-2;for(const para of t.split('\n')){let line='';for(const word of para.split(' ')){const tr=line?line+' '+word:word;if(line&&fnt.widthOfTextAtSize(tr,sz)>w.w-4){pg.drawText(line,{x:w.x+2,y:ly,size:sz,font:fnt});ly-=sz*1.15;line=word}else line=tr}pg.drawText(line,{x:w.x+2,y:ly,size:sz,font:fnt});ly-=sz*1.15}}
+  if(f.multi&&w.rules)mlDraw(pg,w,t,fnt);else if(f.multi){let ly=w.y+w.h-sz-2;for(const para of t.split('\n')){let line='';for(const word of para.split(' ')){const tr=line?line+' '+word:word;if(line&&fnt.widthOfTextAtSize(tr,sz)>w.w-4){pg.drawText(line,{x:w.x+2,y:ly,size:sz,font:fnt});ly-=sz*1.15;line=word}else line=tr}pg.drawText(line,{x:w.x+2,y:ly,size:sz,font:fnt});ly-=sz*1.15}}
   else{while(sz>5&&fnt.widthOfTextAtSize(t,sz)>w.w-4)sz-=.5;pg.drawText(t,{x:w.x+2,y:w.y+(w.h-sz)/2+sz*.15,size:sz,font:fnt})}}}}
 async function buildFilled(manual,X){X=X||{cur,fields,values};fstage='load';const doc=await PDFDocument.load(X.cur.bytes.slice(0)),fnt=await doc.embedFont(StandardFonts.Helvetica),clean=mkClean(fnt);
  if(manual){fstage='draw text';drawManual(doc,fnt,clean,X);return{doc,fnt,clean}}
@@ -281,8 +301,8 @@ async function buildFilled(manual,X){X=X||{cur,fields,values};fstage='load';cons
  for(const f of form.getFields())if(f instanceof PDFSignature){try{form.removeField(f)}catch{}}
  const sigNames=new Set(X.fields.filter(x=>x.t==='sig').map(x=>x.name));
  for(const f of form.getFields()){const v=X.values[f.getName()];if(v===undefined||v===''||sigNames.has(f.getName()))continue;
-  try{if(f instanceof PDFTextField){let t=clean(v,f.isMultiline());const mx=f.getMaxLength();if(mx)t=t.slice(0,mx);f.setText(t)}else if(f instanceof PDFCheckBox)v?f.check():f.uncheck();else f.select(v)}catch{}}
- fstage='flatten';form.updateFieldAppearances(fnt);form.flatten();dropDeadAnnots(doc);return{doc,fnt,clean}}
+  try{if(f instanceof PDFTextField){if(f.isMultiline()&&X.fields.some(q=>q.name===f.getName()&&q.multi&&q.widgets.some(w=>w.rules)))continue;let t=clean(v,f.isMultiline());const mx=f.getMaxLength();if(mx)t=t.slice(0,mx);f.setText(t)}else if(f instanceof PDFCheckBox)v?f.check():f.uncheck();else f.select(v)}catch{}}
+ fstage='flatten';form.updateFieldAppearances(fnt);form.flatten();dropDeadAnnots(doc);X.fields.forEach(f=>{if(f.t!=='text'||!f.multi)return;const v=X.values[f.name];if(!v)return;f.widgets.forEach(w=>{if(w.rules)mlDraw(doc.getPage(w.p),w,clean(v,true),fnt)})});return{doc,fnt,clean}}
 function dropDeadAnnots(doc){try{doc.getPages().forEach(pg=>{const an=pg.node.Annots();if(!an)return;for(let i=an.size()-1;i>=0;i--){if(!doc.context.lookup(an.get(i)))an.remove(i)}})}catch(x){console.warn(x)}}
 async function buildImage(){fstage='render pages';if(!pdfjsDoc)throw new Error('no page renderer');const doc=await PDFDocument.create(),fnt=await doc.embedFont(StandardFonts.Helvetica),SC=2;
  for(let n=1;n<=pdfjsDoc.numPages;n++){const pg=await pdfjsDoc.getPage(n),v1=pg.getViewport({scale:1}),v=pg.getViewport({scale:SC}),c=document.createElement('canvas');c.width=v.width;c.height=v.height;
@@ -292,7 +312,7 @@ async function buildImage(){fstage='render pages';if(!pdfjsDoc)throw new Error('
    if(f.t==='sig'){const tr=await trimSig(v0);if(!tr)continue;const im=await loadImg(tr),k=Math.min((W-4)/im.width,(H-2)/im.height),iw=im.width*k,ih=im.height*k;x.drawImage(im,X+(W-iw)/2,Y+(H-ih)/2,iw,ih);continue}
    if(f.t==='check'||f.t==='radio'){if(f.t==='radio'&&v0!==w.o)continue;x.font='bold '+H*.8+'px Helvetica,Arial,sans-serif';x.fillText('X',X+W*.2,Y+H/2);continue}
    let sz=Math.max(6,Math.min(11,w.h*.7))*SC;const t=String(v0).replace(/\r/g,'');x.font=sz+'px Helvetica,Arial,sans-serif';
-   if(f.multi){x.textBaseline='top';let ly=Y+2*SC;for(const para of t.split('\n')){let line='';for(const word of para.split(' ')){const tr=line?line+' '+word:word;if(line&&x.measureText(tr).width>W-4*SC){x.fillText(line,X+2*SC,ly);ly+=sz*1.15;line=word}else line=tr}x.fillText(line,X+2*SC,ly);ly+=sz*1.15}x.textBaseline='middle'}
+   if(f.multi&&w.rules){const z=mlSz(w)*SC;x.font=z+'px Helvetica,Arial,sans-serif';x.textBaseline='alphabetic';mlLines(w,t,q=>x.measureText(q).width/SC).forEach(l=>x.fillText(l.s,X+2*SC,(v1.height-l.y)*SC));x.textBaseline='middle'}else if(f.multi){x.textBaseline='top';let ly=Y+2*SC;for(const para of t.split('\n')){let line='';for(const word of para.split(' ')){const tr=line?line+' '+word:word;if(line&&x.measureText(tr).width>W-4*SC){x.fillText(line,X+2*SC,ly);ly+=sz*1.15;line=word}else line=tr}x.fillText(line,X+2*SC,ly);ly+=sz*1.15}x.textBaseline='middle'}
    else{const one=t.replace(/\n/g,' ');while(sz>5*SC&&x.measureText(one).width>W-4*SC){sz-=SC*.5;x.font=sz+'px Helvetica,Arial,sans-serif'}x.fillText(one,X+2*SC,Y+H/2)}}
   const jpg=await doc.embedJpg(c.toDataURL('image/jpeg',.92)),p=doc.addPage([v1.width,v1.height]);p.drawImage(jpg,{x:0,y:0,width:v1.width,height:v1.height})}
  return{doc,fnt,clean:mkClean(fnt),sigDone:true}}
