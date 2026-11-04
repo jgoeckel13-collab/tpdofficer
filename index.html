@@ -169,7 +169,7 @@ function formFolders(){const cen=typeof pdApi==='function',me=APP==='officer'?'o
  const mk=app=>forms.map((f,i)=>({f,i,tag:f.builtin?'built in':(cen&&(f._aud||'all')==='all'?'both apps':'')})).filter(x=>inF(x.f,app));
  const note=app=>app===me?'':(app==='kiosk'?'Built-in kiosk forms are managed in the Kiosk app’s own Staff setup.':'Built-in officer forms are managed in the Officer app’s own Staff setup.');
  const hid=Object.keys(kindOv.__hidden||{}).length;
- return folderHtml('kiosk',mk('kiosk'),note('kiosk'))+folderHtml('officer',mk('officer'),note('officer'))+(hid?`<div class="row"><button class="alt sm" onclick="restoreForms()">Restore ${hid} removed built-in form${hid>1?'s':''}</button></div>`:'')}
+ return folderHtml(me,mk(me),'')+(hid?`<div class="row"><button class="alt sm" onclick="restoreForms()">Restore ${hid} removed built-in form${hid>1?'s':''}</button></div>`:'')}
 function restoreForms(){kindOv.__hidden={};ls.set('kinds',kindOv);forms=[...builtinForms(),...forms.filter(x=>!x.builtin)];render()}
 async function delForm(i){if(!session)return go('admin');const f=forms[i];if(!f)return;
  if(!confirm('Remove "'+f.name.replace(/\.pdf$/i,'')+'"?'+(f.builtin?' You can bring it back with "Restore removed built-in forms".':'')))return;
