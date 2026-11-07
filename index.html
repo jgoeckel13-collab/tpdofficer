@@ -505,16 +505,42 @@ async function printIt(){const cs=selCopies();if(!cs.length)return needCopy();if
  fr.style.cssText='position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';fr.onload=()=>{try{fr.contentWindow.focus();fr.contentWindow.print()}catch{window.open(url,'_blank')}};fr.src=url;document.body.appendChild(fr);setTimeout(()=>{fr.remove();URL.revokeObjectURL(url)},180000)}
 /* ---- photos on the Motor Vehicle Inventory (officer side) ---- */
 let photos=[];
-const photoForm=f=>APP==='officer'&&/inventory|crash|found property|objeto encontrado/i.test((f&&f.name)||'');
+const photoForm=f=>APP==='officer'&&/inventory|crash|found property|objeto encontrado|car seat/i.test((f&&f.name)||'');
 function photoInner(){return`<div class="row" style="gap:8px">${photos.map((p,i)=>`<div style="position:relative"><img src="${p.url}" alt="Photo ${i+1}" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid #ccd"><button class="alt sm" style="position:absolute;top:2px;right:2px;padding:2px 8px" onclick="rmPhoto(${i})">✕</button></div>`).join('')}</div>
  <input type="file" id="phcam" accept="image/*" capture="environment" hidden onchange="addPhotos(this)"><input type="file" id="phin" accept="image/*" multiple hidden onchange="addPhotos(this)"><div class="row"><button class="alt" onclick="document.getElementById('phcam').click()">📷 Take photo</button><button class="alt" onclick="document.getElementById('phin').click()">🖼️ Choose photos</button><span class="mut">${photos.length} added (up to 12)</span></div>`}
-function photoCard(wrap){if(!cur||!photoForm(cur))return'';const inner=`<h4 style="margin:14px 0 4px">Vehicle photos</h4><p class="mut" style="margin:0 0 8px">Take or choose pictures of the vehicle and its contents. They are added to the end of the PDF.</p><div id="phbox">${photoInner()}</div>`;return wrap?`<div class="card">${inner}</div>`:inner}
+function photoCard(wrap){if(!cur||!photoForm(cur))return'';const cs=/car seat/i.test(cur.name),inner=(cs?csCard():'')+`<h4 style="margin:14px 0 4px">${cs?'Seat photos':'Vehicle photos'}</h4><p class="mut" style="margin:0 0 8px">Take or choose pictures of the ${cs?'seat and its labels':'vehicle and its contents'}. They are added to the end of the PDF.</p><div id="phbox">${photoInner()}</div>`;return wrap?`<div class="card">${inner}</div>`:inner}
+/* ---- car seat label scan (officer): photo + on-device text detection, falls back to typing ---- */
+function csCard(){return`<div style="margin:14px 0"><h4 style="margin:0 0 4px">Scan seat label</h4><p class="mut" style="margin:0 0 8px">Take a clear, close photo of the manufacturer's label. The app tries to read the manufacturer, model name, model number and date of manufacture, and fills them in for you to check. The photo is also added to the PDF.</p><input type="file" id="cscam" accept="image/*" capture="environment" hidden onchange="csScan(this)"><div class="row"><button onclick="document.getElementById('cscam').click()">📷 Scan label</button></div><p class="mut" id="csmsg" style="margin:6px 0 0"></p></div>`}
+const CS_BRANDS=['Graco','Chicco','Britax','Evenflo','Safety 1st','Cosco','Diono','Maxi-Cosi','Maxi Cosi','Clek','Nuna','UPPAbaby','Peg Perego','Baby Trend','Dorel','Orbit','Cybex','Combi','Joie','Summer Infant','Fisher-Price','Munchkin','Recaro','Kiddy','Mountain Buggy','Lilly','Century','Bubble Bum','Harmony','Ride Safer','Wayb','Nania'];
+function csParse(txt){const L=txt.split(/\n+/).map(x=>x.trim()).filter(Boolean),out={},all=L.join('\n');
+ for(const b of CS_BRANDS)if(new RegExp('\\b'+b.replace(/[-\s]/g,'[-\\s]?')+'\\b','i').test(all)){out.Manufacturer=b;break}
+ const mn=all.match(/(?:model\s*(?:no\.?|number|num|#)|mod(?:el)?\.?\s*#|\bM\/N|\bMN)\s*[:#.\-]?\s*([A-Z0-9][A-Z0-9\-\/\.]{2,})/i);if(mn)out['Model Number']=mn[1].toUpperCase();
+ const nm=all.match(/model\s*name\s*[:\-]?\s*([^\n]{2,40})/i);if(nm)out['Model Name']=nm[1].trim();
+ const mo={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12},p2=n=>String(n).padStart(2,'0');let d=null,m;
+ const ctx=all.match(/(?:date\s*of\s*manufacture|manufactured|mfg\.?\s*date|\bDOM\b|date\s*of\s*mfg|fabrication)[^\n]{0,6}\n?([^\n]{4,30})/i),seg=ctx?ctx[1]:all;
+ for(const t of [seg,all]){if(d)break;
+  if(m=t.match(/\b(20[0-3]\d|19[89]\d)[\/\-.](\d{1,2})[\/\-.](\d{1,2})\b/))d=p2(m[2])+'/'+p2(m[3])+'/'+m[1];
+  else if(m=t.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20[0-3]\d|19[89]\d)\b/))d=p2(m[1])+'/'+p2(m[2])+'/'+m[3];
+  else if(m=t.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*(\d{1,2})?,?\s*(20[0-3]\d|19[89]\d)\b/i))d=p2(mo[m[1].toLowerCase()])+(m[2]?'/'+p2(m[2]):'')+'/'+m[3];
+  else if(m=t.match(/\b(\d{1,2})[\/\-.](20[0-3]\d)\b/))d=p2(m[1])+'/'+m[2]}
+ if(d)out['Date of Manufacture']=d;return out}
+async function csScan(inp){const f=inp.files[0];inp.value='';if(!f)return;const msg=$('#csmsg'),say=t=>{if(msg)msg.textContent=t};say('Reading label...');
+ let bm;try{bm=await createImageBitmap(f,{imageOrientation:'from-image'})}catch{return say('Could not open that photo.')}
+ const k=Math.min(1,1600/Math.max(bm.width,bm.height)),c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);
+ if(photos.length<12){const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));photos.push({bytes:new Uint8Array(await blob.arrayBuffer()),url:URL.createObjectURL(blob)});const b=$('#phbox');if(b)b.innerHTML=photoInner()}
+ if(typeof TextDetector==='undefined')return say('Photo added to the PDF. This phone/browser cannot read text automatically - please type the manufacturer, model name, model number and date from the photo.');
+ try{const det=new TextDetector(),res=await det.detect(c);res.sort((a,b)=>a.boundingBox.y-b.boundingBox.y||a.boundingBox.x-b.boundingBox.x);
+  const txt=res.map(r=>r.rawValue).join('\n'),got=csParse(txt),names=Object.keys(got);
+  if(!names.length)return say('Photo added, but no label text could be read - move closer, avoid glare, or type it in.');
+  for(const f of fields)if(got[f.name]&&!values[f.name])values[f.name]=got[f.name];
+  listMode?render():paint();const b2=$('#csmsg');if(b2)b2.textContent='Read: '+names.map(n=>n+' = '+got[n]).join('; ')+'. Please check them against the label'+(names.length<4?' and type any that are missing.':'.')}
+ catch(x){console.warn(x);say('Photo added, but automatic reading failed - please type the details.')}}
 async function addPhotos(inp){const fl=[...inp.files];inp.value='';for(const f of fl){if(photos.length>=12)break;try{const bm=await createImageBitmap(f,{imageOrientation:'from-image'}),k=Math.min(1,1600/Math.max(bm.width,bm.height)),c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);if(bm.close)bm.close();
  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.8));photos.push({bytes:new Uint8Array(await blob.arrayBuffer()),url:URL.createObjectURL(blob)})}catch(x){console.warn(x);alert('Could not add '+f.name)}}const b=$('#phbox');if(b)b.innerHTML=photoInner()}
 function rmPhoto(i){const p=photos.splice(i,1)[0];if(p)URL.revokeObjectURL(p.url);const b=$('#phbox');if(b)b.innerHTML=photoInner()}
 function clearPhotos(){photos.forEach(p=>URL.revokeObjectURL(p.url));photos=[]}
 async function addPhotoPages(doc){const fb=await doc.embedFont(StandardFonts.HelveticaBold),ft=await doc.embedFont(StandardFonts.Helvetica),W=612,H=792,M=36,cw=(W-M*2-18)/2,ch=(H-M*2-30-18)/2,np=Math.ceil(photos.length/4);
- for(let i=0;i<photos.length;i+=4){const pg=doc.addPage([W,H]);pg.drawText('Vehicle photos - '+(/crash/i.test(cur&&cur.name)?'Crash Worksheet':'Motor Vehicle Inventory')+' ('+(i/4+1)+' of '+np+')',{x:M,y:H-M-12,size:12,font:fb});
+ for(let i=0;i<photos.length;i+=4){const pg=doc.addPage([W,H]);pg.drawText((/car seat/i.test(cur&&cur.name)?'Seat photos':'Vehicle photos')+' - '+(/crash/i.test(cur&&cur.name)?'Crash Worksheet':/car seat/i.test(cur&&cur.name)?'Child Car Seat Check':/found/i.test(cur&&cur.name)?'Found Property':'Motor Vehicle Inventory')+' ('+(i/4+1)+' of '+np+')',{x:M,y:H-M-12,size:12,font:fb});
   for(let j=0;j<4&&i+j<photos.length;j++){const im=await doc.embedJpg(photos[i+j].bytes),k=Math.min(cw/im.width,(ch-14)/im.height),w=im.width*k,h=im.height*k,col=j%2,row=j>>1,top=H-M-30-row*(ch+18),x0=M+col*(cw+18);
    pg.drawImage(im,{x:x0+(cw-w)/2,y:top-h,width:w,height:h});pg.drawText('Photo '+(i+j+1),{x:x0+(cw-w)/2,y:top-h-11,size:9,font:ft})}}}
 async function pickOfficers(){return new Promise(res=>{const d=document.createElement('div');d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px';
