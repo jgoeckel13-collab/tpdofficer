@@ -513,28 +513,34 @@ function photoCard(wrap){if(!cur||!photoForm(cur))return'';const cs=/car seat/i.
 function csCard(){return`<div style="margin:14px 0"><h4 style="margin:0 0 4px">Scan seat label</h4><p class="mut" style="margin:0 0 8px">Take a clear, close photo of the manufacturer's label. The app tries to read the manufacturer, model name, model number and date of manufacture, and fills them in for you to check. The photo is also added to the PDF.</p><input type="file" id="cscam" accept="image/*" capture="environment" hidden onchange="csScan(this)"><div class="row"><button onclick="document.getElementById('cscam').click()">📷 Scan label</button></div><p class="mut" id="csmsg" style="margin:6px 0 0"></p></div>`}
 const CS_BRANDS=['Graco','Chicco','Britax','Evenflo','Safety 1st','Cosco','Diono','Maxi-Cosi','Maxi Cosi','Clek','Nuna','UPPAbaby','Peg Perego','Baby Trend','Dorel','Orbit','Cybex','Combi','Joie','Summer Infant','Fisher-Price','Munchkin','Recaro','Kiddy','Mountain Buggy','Lilly','Century','Bubble Bum','Harmony','Ride Safer','Wayb','Nania'];
 function csParse(txt){const L=txt.split(/\n+/).map(x=>x.trim()).filter(Boolean),out={},all=L.join('\n');
- for(const b of CS_BRANDS)if(new RegExp('\\b'+b.replace(/[-\s]/g,'[-\\s]?')+'\\b','i').test(all)){out.Manufacturer=b;break}
- const mn=all.match(/(?:model\s*(?:no\.?|number|num|#)|mod(?:el)?\.?\s*#|\bM\/N|\bMN)\s*[:#.\-]?\s*([A-Z0-9][A-Z0-9\-\/\.]{2,})/i);if(mn)out['Model Number']=mn[1].toUpperCase();
- const nm=all.match(/model\s*name\s*[:\-]?\s*([^\n]{2,40})/i);if(nm)out['Model Name']=nm[1].trim();
+ if(/\bg?raco\b/i.test(all))out.Manufacturer='Graco';else for(const b of CS_BRANDS)if(new RegExp('\\b'+b.replace(/[-\s]/g,'[-\\s]?')+'\\b','i').test(all)){out.Manufacturer=b;break}
+ const mn=all.match(/(?:model\s*(?:no\.?|number|num|#)|model\s*:|mod(?:el)?\.?\s*#|\bM\/N|\bMN)\s*[:#.\-]?\s*([A-Z0-9][A-Z0-9\-\/\.]{2,})/i);if(mn)out['Model Number']=mn[1].toUpperCase();
+ const nm=all.match(/name\s*[:\-]\s*([^\n]{2,40})/i);if(nm)out['Model Name']=nm[1].trim();
  const mo={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12},p2=n=>String(n).padStart(2,'0');let d=null,m;
  const ctx=all.match(/(?:date\s*of\s*manufacture|manufactured|mfg\.?\s*date|\bDOM\b|date\s*of\s*mfg|fabrication)[^\n]{0,6}\n?([^\n]{4,30})/i),seg=ctx?ctx[1]:all;
  for(const t of [seg,all]){if(d)break;
+  if(m=t.match(/\b(20[0-3]\d|19[89]\d)\s*[|\/\-.\s]\s*(\d{1,2})\s*[|\/\-.\s]\s*(\d{1,2})\b/)){if(+m[2]<=12&&+m[3]<=31){d=p2(m[2])+'/'+p2(m[3])+'/'+m[1];break}}
   if(m=t.match(/\b(20[0-3]\d|19[89]\d)[\/\-.](\d{1,2})[\/\-.](\d{1,2})\b/))d=p2(m[2])+'/'+p2(m[3])+'/'+m[1];
   else if(m=t.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20[0-3]\d|19[89]\d)\b/))d=p2(m[1])+'/'+p2(m[2])+'/'+m[3];
   else if(m=t.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*(\d{1,2})?,?\s*(20[0-3]\d|19[89]\d)\b/i))d=p2(mo[m[1].toLowerCase()])+(m[2]?'/'+p2(m[2]):'')+'/'+m[3];
   else if(m=t.match(/\b(\d{1,2})[\/\-.](20[0-3]\d)\b/))d=p2(m[1])+'/'+m[2]}
  if(d)out['Date of Manufacture']=d;return out}
+const TESS_V='5.1.1';let tessP=null;
+function loadTess(){if(window.Tesseract)return Promise.resolve();return tessP||(tessP=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@'+TESS_V+'/dist/tesseract.min.js';s.onload=ok;s.onerror=()=>{tessP=null;no(new Error('offline'))};document.head.appendChild(s)}))}
+async function csOcr(c,say){await loadTess();say('Reading label (first use downloads the reader, about 15 MB - please wait)...');
+ const g=document.createElement('canvas'),k=Math.max(1,2000/Math.max(c.width,c.height));g.width=Math.round(c.width*k);g.height=Math.round(c.height*k);const x=g.getContext('2d');x.filter='grayscale(1) contrast(1.4)';x.drawImage(c,0,0,g.width,g.height);
+ const w=await Tesseract.createWorker('eng',1,{logger:m=>{if(m.status&&m.progress!=null)say('Reading label: '+m.status+' '+Math.round(m.progress*100)+'%')}});
+ try{await w.setParameters({tessedit_pageseg_mode:'11',preserve_interword_spaces:'1'});const r=await w.recognize(g);return r.data.text}finally{w.terminate()}}
 async function csScan(inp){const f=inp.files[0];inp.value='';if(!f)return;const msg=$('#csmsg'),say=t=>{if(msg)msg.textContent=t};say('Reading label...');
  let bm;try{bm=await createImageBitmap(f,{imageOrientation:'from-image'})}catch{return say('Could not open that photo.')}
  const k=Math.min(1,1600/Math.max(bm.width,bm.height)),c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);
  if(photos.length<12){const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));photos.push({bytes:new Uint8Array(await blob.arrayBuffer()),url:URL.createObjectURL(blob)});const b=$('#phbox');if(b)b.innerHTML=photoInner()}
- if(typeof TextDetector==='undefined')return say('Photo added to the PDF. This phone/browser cannot read text automatically - please type the manufacturer, model name, model number and date from the photo.');
- try{const det=new TextDetector(),res=await det.detect(c);res.sort((a,b)=>a.boundingBox.y-b.boundingBox.y||a.boundingBox.x-b.boundingBox.x);
-  const txt=res.map(r=>r.rawValue).join('\n'),got=csParse(txt),names=Object.keys(got);
-  if(!names.length)return say('Photo added, but no label text could be read - move closer, avoid glare, or type it in.');
-  for(const f of fields)if(got[f.name]&&!values[f.name])values[f.name]=got[f.name];
-  listMode?render():paint();const b2=$('#csmsg');if(b2)b2.textContent='Read: '+names.map(n=>n+' = '+got[n]).join('; ')+'. Please check them against the label'+(names.length<4?' and type any that are missing.':'.')}
- catch(x){console.warn(x);say('Photo added, but automatic reading failed - please type the details.')}}
+ let got={},txt='';
+ if(typeof TextDetector!=='undefined'){try{const res=await new TextDetector().detect(c);res.sort((a,b)=>a.boundingBox.y-b.boundingBox.y||a.boundingBox.x-b.boundingBox.x);txt=res.map(r=>r.rawValue).join('\n');got=csParse(txt)}catch(x){console.warn(x)}}
+ if(Object.keys(got).length<3){try{const t2=await csOcr(c,say),g2=csParse(t2);for(const n in g2)if(!got[n])got[n]=g2[n]}catch(x){console.warn(x);if(!Object.keys(got).length)return say('Photo added. The reader could not be loaded (it needs internet the first time) - please type the manufacturer, model name, model number and date from the photo.')}}
+ const names=Object.keys(got);if(!names.length)return say('Photo added, but no label text could be read - move closer, avoid glare, or type it in.');
+ for(const f of fields)if(got[f.name]&&!values[f.name])values[f.name]=got[f.name];
+ listMode?render():paint();const b2=$('#csmsg');if(b2)b2.textContent='Read: '+names.map(n=>n+' = '+got[n]).join('; ')+'. Please check them against the label'+(names.length<4?' and type any that are missing.':'.')}
 async function addPhotos(inp){const fl=[...inp.files];inp.value='';for(const f of fl){if(photos.length>=12)break;try{const bm=await createImageBitmap(f,{imageOrientation:'from-image'}),k=Math.min(1,1600/Math.max(bm.width,bm.height)),c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);if(bm.close)bm.close();
  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.8));photos.push({bytes:new Uint8Array(await blob.arrayBuffer()),url:URL.createObjectURL(blob)})}catch(x){console.warn(x);alert('Could not add '+f.name)}}const b=$('#phbox');if(b)b.innerHTML=photoInner()}
 function rmPhoto(i){const p=photos.splice(i,1)[0];if(p)URL.revokeObjectURL(p.url);const b=$('#phbox');if(b)b.innerHTML=photoInner()}
