@@ -524,6 +524,11 @@ function csParse(txt){const L=txt.split(/\n+/).map(x=>x.trim()).filter(Boolean),
   else if(m=t.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20[0-3]\d|19[89]\d)\b/))d=p2(m[1])+'/'+p2(m[2])+'/'+m[3];
   else if(m=t.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*(\d{1,2})?,?\s*(20[0-3]\d|19[89]\d)\b/i))d=p2(mo[m[1].toLowerCase()])+(m[2]?'/'+p2(m[2]):'')+'/'+m[3];
   else if(m=t.match(/\b(\d{1,2})[\/\-.](20[0-3]\d)\b/))d=p2(m[1])+'/'+m[2]}
+ if(!d){const n=all.replace(/(?<=\d)[OoQD](?=\d|\b)|(?<=\b)[OoQD](?=\d)/g,'0').replace(/[Il|!](?=\d)|(?<=\d)[Il|!]/g,' '),tk=n.match(/\d+/g)||[],yr=new Date().getFullYear();
+  for(let i=0;i<tk.length&&!d;i++){if(/^(19[89]\d|20[0-3]\d)$/.test(tk[i])&&+tk[i]<=yr+1){const a=tk[i+1],b=tk[i+2],c=tk[i-1],e=tk[i-2];
+   if(a&&b&&+a>=1&&+a<=12&&+b>=1&&+b<=31&&a.length<=2&&b.length<=2)d=p2(a)+'/'+p2(b)+'/'+tk[i];
+   else if(a&&+a>=1&&+a<=12&&a.length<=2)d=p2(a)+'/'+tk[i];
+   else if(c&&e&&+c>=1&&+c<=31&&+e>=1&&+e<=12&&c.length<=2&&e.length<=2)d=p2(e)+'/'+p2(c)+'/'+tk[i]}}}
  if(d)out['Date of Manufacture']=d;return out}
 const TESS_V='5.1.1';let tessP=null;
 function loadTess(){if(window.Tesseract)return Promise.resolve();return tessP||(tessP=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@'+TESS_V+'/dist/tesseract.min.js';s.onload=ok;s.onerror=()=>{tessP=null;no(new Error('offline'))};document.head.appendChild(s)}))}
@@ -535,12 +540,12 @@ async function csScan(inp){const f=inp.files[0];inp.value='';if(!f)return;const 
  let bm;try{bm=await createImageBitmap(f,{imageOrientation:'from-image'})}catch{return say('Could not open that photo.')}
  const k=Math.min(1,1600/Math.max(bm.width,bm.height)),c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);
  if(photos.length<12){const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));photos.push({bytes:new Uint8Array(await blob.arrayBuffer()),url:URL.createObjectURL(blob)});const b=$('#phbox');if(b)b.innerHTML=photoInner()}
- let got={},txt='';
+ let got={},txt='',raw='';
  if(typeof TextDetector!=='undefined'){try{const res=await new TextDetector().detect(c);res.sort((a,b)=>a.boundingBox.y-b.boundingBox.y||a.boundingBox.x-b.boundingBox.x);txt=res.map(r=>r.rawValue).join('\n');got=csParse(txt)}catch(x){console.warn(x)}}
- if(Object.keys(got).length<3){try{const t2=await csOcr(c,say),g2=csParse(t2);for(const n in g2)if(!got[n])got[n]=g2[n]}catch(x){console.warn(x);if(!Object.keys(got).length)return say('Photo added. The reader could not be loaded (it needs internet the first time) - please type the manufacturer, model name, model number and date from the photo.')}}
+ if(Object.keys(got).length<3){try{const t2=await csOcr(c,say),g2=csParse(t2);raw=t2;for(const n in g2)if(!got[n])got[n]=g2[n]}catch(x){console.warn(x);if(!Object.keys(got).length)return say('Photo added. The reader could not be loaded (it needs internet the first time) - please type the manufacturer, model name, model number and date from the photo.')}}
  const names=Object.keys(got);if(!names.length)return say('Photo added, but no label text could be read - move closer, avoid glare, or type it in.');
  for(const f of fields)if(got[f.name]&&!values[f.name])values[f.name]=got[f.name];
- listMode?render():paint();const b2=$('#csmsg');if(b2)b2.textContent='Read: '+names.map(n=>n+' = '+got[n]).join('; ')+'. Please check them against the label'+(names.length<4?' and type any that are missing.':'.')}
+ listMode?render():paint();const b2=$('#csmsg');if(b2)b2.textContent='Read: '+names.map(n=>n+' = '+got[n]).join('; ')+'. Please check them against the label'+(names.length<4?' and type any that are missing.':'.')+(got['Date of Manufacture']?'':' (Date not read'+(raw?' - text seen: '+raw.replace(/\s+/g,' ').slice(0,160):'')+')')}
 async function addPhotos(inp){const fl=[...inp.files];inp.value='';for(const f of fl){if(photos.length>=12)break;try{const bm=await createImageBitmap(f,{imageOrientation:'from-image'}),k=Math.min(1,1600/Math.max(bm.width,bm.height)),c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);if(bm.close)bm.close();
  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.8));photos.push({bytes:new Uint8Array(await blob.arrayBuffer()),url:URL.createObjectURL(blob)})}catch(x){console.warn(x);alert('Could not add '+f.name)}}const b=$('#phbox');if(b)b.innerHTML=photoInner()}
 function rmPhoto(i){const p=photos.splice(i,1)[0];if(p)URL.revokeObjectURL(p.url);const b=$('#phbox');if(b)b.innerHTML=photoInner()}
