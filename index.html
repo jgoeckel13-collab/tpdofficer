@@ -197,7 +197,7 @@ async function openForm(i,restore){clearPhotos();cur=forms[i];values=restore&&re
  if(!fields.some(f=>f.widgets.length))listMode=true;
  if(!listMode){try{if(pdfjsDoc){try{await pdfjsDoc.destroy()}catch{}}pdfjsDoc=null;pdfjsLib.GlobalWorkerOptions.workerSrc=WORKER;pdfjsDoc=await pdfjsLib.getDocument({data:new Uint8Array(cur.bytes.slice(0))}).promise}catch(x){listMode=true;pdfjsDoc=null}}
  for(const f of fields)if(f.t==='text'&&/^town employed by$/i.test(f.name)&&!values[f.name])values[f.name]='Tisbury';
-  if(is209(cur))for(const f of fields)if(f.t==='text'&&/^police department$/i.test(f.name)&&!values[f.name])values[f.name]='Tisbury';
+  if(is209(cur))for(const f of fields)if(f.t==='text'&&/^(police department|\(15\) police department\(s\) with reports)$/i.test(f.name)&&!values[f.name])values[f.name]='Tisbury';
  for(const f of fields)if(SK[f.kind]&&!values[f.name])values[f.name]=nowVal(f.kind);values0=JSON.stringify(values);
  go('fill')}
 
@@ -270,7 +270,7 @@ async function trimSig(u){const im=await new Promise(r=>{const i=new Image();i.o
  for(let y=0;y<c.height;y++)for(let xx=0;xx<c.width;xx++)if(d[(y*c.width+xx)*4+3]>10){if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(y<y0)y0=y;if(y>y1)y1=y}
  if(x1<0)return null;const w=x1-x0+9,h=y1-y0+9,o=document.createElement('canvas');o.width=w;o.height=h;o.getContext('2d').drawImage(c,x0-4,y0-4,w,h,0,0,w,h);return o.toDataURL('image/png')}
 const is209=f=>/209a|abuse prevention/i.test((f&&f.name)||'');
-function ampm209(){if(!cur||!is209(cur))return;[['Time of Order','Order time'],['Next Hearing Time','Hearing time']].forEach(([t,b])=>{const m=/(\d{1,2}):\d\d\s*([AP])M/i.exec(String(values[t]||''));if(!m)return;const pm=/p/i.test(m[2]);values[b+' AM']=!pm;values[b+' PM']=pm})}
+function ampm209(){if(!cur||!is209(cur))return;[['Time of Order','Order time'],['Next Hearing Time','Hearing time']].forEach(([t,b])=>{const m=/(\d{1,2}):\d\d\s*([AP])M/i.exec(String(values[t]||''));if(!m)return;const pm=/p/i.test(m[2]);values[b+' AM']=!pm;values[b+' PM']=pm;if(t==='Time of Order')values[t]=String(values[t]).replace(/\s*[AP]M\s*$/i,'')})}
 function applyRules(rr){ampm209();const x=fields.find(f=>f.auto);if(!x)return;const iss=values[x.auto],iso=iss?toISO(String(iss).split(' ')[0]):'';let nv='';
  if(iso){const[y,m,d]=iso.split('-').map(Number);nv=fmtDate((y+1)+'-'+p2(m)+'-'+p2(m===2&&d===29?28:d),x.max)}
  if((values[x.name]||'')!==nv){values[x.name]=nv;if(rr&&view==='fill'&&listMode)render()}}
