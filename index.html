@@ -129,7 +129,7 @@ function fieldHtml(f,i){const n=e(f.name),l=`<label>${n}</label>`;
   if(isOffField(f))return`${l}<select onchange="values[fields[${i}].name]=this.value;document.getElementById('ot${i}').value=this.value">${offOpts(f)}</select><label class="mut">Or type a name</label><input type="text" id="ot${i}" value="${e(values[f.name]||'')}" oninput="values[fields[${i}].name]=this.value">`;
  if(f.t==='sig')return`<div><label>${n}</label><canvas class="lsig" data-n="${n}" width="700" height="200" style="height:110px"></canvas><div class="row"><button class="alt sm" onclick="clrPad(this.closest('div').parentNode.querySelector('canvas'))">Clear</button></div></div>`;if(f.t==='check')return`<label class="chk"><input type="checkbox" ${values[f.name]?'checked':''} onchange="values[fields[${i}].name]=this.checked">${n}</label>`;
  if(f.t==='sel')return`${l}<select onchange="values[fields[${i}].name]=this.value"><option value="">—</option>${f.opts.map(o=>`<option ${values[f.name]===o?'selected':''}>${e(o)}</option>`).join('')}</select>`;
- if(f.t==='radio')return`${l}${f.opts.map(o=>`<label class="chk"><input type="radio" name="r${i}" ${values[f.name]===o?'checked':''} onchange="values[fields[${i}].name]='${e(o).replace(/\\/g,'\\\\')}'">${e(o)}</label>`).join('')}`;
+ if(f.t==='radio')return`${l}${f.opts.map(o=>`<label class="chk"><input type="radio" name="r${i}" value="${e(o)}" ${values[f.name]===o?'checked':''} onchange="values[fields[${i}].name]=this.value">${e(o)}</label>`).join('')}`;
  if(SK[f.kind])return`${l}<select onchange="values[fields[${i}].name]=this.value"><option value="">—</option>${selOpts(f.kind).map(o=>`<option ${values[f.name]===o?'selected':''}>${o}</option>`).join('')}</select>`;if(f.kind)return`${l}<input type="${KT[f.kind]}" value="${toKind(f.kind,values[f.name]||'')}" onclick="try{this.showPicker()}catch{}" onchange="values[fields[${i}].name]=fmtKind(fields[${i}].kind,this.value,fields[${i}].max);applyRules(1)" ${f.auto?'disabled':''}>${f.auto?'<p class="mut">Automatic: one year after the issue date.</p>':''}`;return f.multi?`${l}<textarea rows="3" oninput="values[fields[${i}].name]=this.value">${e(values[f.name]||'')}</textarea>`:`${l}<input type="text" value="${e(values[f.name]||'')}" oninput="values[fields[${i}].name]=this.value">`}
 async function addForms(fl){if(!session)return go('admin');const files=[...fl],out=[];
  for(const f of files){try{const bytes=await f.arrayBuffer();const d=await PDFDocument.load(bytes.slice(0),{ignoreEncryption:true});const n=d.getForm().getFields().length;
@@ -400,13 +400,14 @@ function acctHtml(){if(session.open)return'';const adm=session.role==='admin';
  return`<div class="card"><div class="li"><span>Signed in as <b>${e(session.u)}</b> (${session.role})</span><button class="alt sm" onclick="logout()">Log out</button></div></div>
  <div class="card"><h3 style="margin-top:0">${adm?'Reset a password':'Change my password'}</h3>
  <select id="ru">${users.filter(x=>adm||x.u===session.u).map(x=>`<option ${x.u===session.u?'selected':''}>${e(x.u)}</option>`).join('')}</select>
- <label>New password (min 10 characters)</label><input type="password" id="rp"><div class="row"><button class="sm" onclick="resetPw()">Update password</button></div></div>
+ <label>Your current password</label><input type="password" id="rpo" autocomplete="current-password"><label>New password (min 10 characters)</label><input type="password" id="rp" autocomplete="new-password"><div class="row"><button class="sm" onclick="resetPw()">Update password</button></div></div>
  ${adm?`<div class="card"><h3 style="margin-top:0">Accounts</h3>${users.map((x,i)=>`<div class="li"><span>${e(x.u)} <span class="mut">${x.role}</span></span>${x.u!==session.u?`<button class="alt sm" onclick="delUser(${i})">Remove</button>`:''}</div>`).join('')}
  <label>New username</label><input type="text" id="nu" autocapitalize="off" autocomplete="off"><label>Temporary password (min 10)</label><input type="password" id="np"><label>Role</label><select id="nr"><option value="staff">Staff</option><option value="admin">Admin</option></select><div class="row"><button class="sm" onclick="addUser()">Add account</button></div></div>`:''}
  <p id="amsg" style="color:#c0392b"></p>`}
 async function resetPw(){const i=users.findIndex(x=>x.u===$('#ru').value),p=$('#rp').value;
  if(i<0||!session||(session.role!=='admin'&&users[i].u!==session.u))return;if(p.length<10)return say('Password must be at least 10 characters.');
- Object.assign(users[i],await hashPw(p),{fails:0,lock:0});saveU();$('#rp').value='';say('Password updated.')}
+ {const me=users.find(x=>x.u===session.u);if(!me||(await hashPw(($('#rpo')||{}).value||'',me.salt)).hash!==me.hash)return say('Your current password is not correct.')}
+ Object.assign(users[i],await hashPw(p),{fails:0,lock:0});saveU();$('#rp').value='';$('#rpo').value='';say('Password updated.')}
 async function addUser(){if(!session||session.role!=='admin')return;const u=$('#nu').value.trim(),p=$('#np').value;
  if(!u)return say('Enter a username.');if(users.some(x=>x.u.toLowerCase()===u.toLowerCase()))return say('Username already exists.');if(p.length<10)return say('Password must be at least 10 characters.');
  users.push({u,role:$('#nr').value,...await hashPw(p),fails:0,lock:0});saveU();render()}
@@ -539,10 +540,14 @@ function csParse(txt){const L=txt.split(/\n+/).map(x=>x.trim()).filter(Boolean),
    else if(c&&e&&+c>=1&&+c<=31&&+e>=1&&+e<=12&&c.length<=2&&e.length<=2)d=p2(e)+'/'+p2(c)+'/'+tk[i]}}}
  if(d)out['Date of Manufacture']=d;return out}
 const TESS_V='5.1.1';let tessP=null;
-function loadTess(){if(window.Tesseract)return Promise.resolve();return tessP||(tessP=new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@'+TESS_V+'/dist/tesseract.min.js';s.onload=ok;s.onerror=()=>{tessP=null;no(new Error('offline'))};document.head.appendChild(s)}))}
+let TESS_LOCAL=false;const TESS_DIR='vendor/ocr/';
+const addJs=src=>new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>no(new Error('offline'));document.head.appendChild(s)});
+function loadTess(){if(window.Tesseract)return Promise.resolve();return tessP||(tessP=(async()=>{
+ try{const r=await fetch(TESS_DIR+'tesseract.min.js',{method:'HEAD',cache:'no-store'});if(r.ok){await addJs(TESS_DIR+'tesseract.min.js');TESS_LOCAL=true;return}}catch{}
+ await addJs('https://cdn.jsdelivr.net/npm/tesseract.js@'+TESS_V+'/dist/tesseract.min.js')})().catch(x=>{tessP=null;throw x}))}
 async function csOcr(c,say){await loadTess();say('Reading label (first use downloads the reader, about 15 MB - please wait)...');
  const g=document.createElement('canvas'),k=Math.max(1,2000/Math.max(c.width,c.height));g.width=Math.round(c.width*k);g.height=Math.round(c.height*k);const x=g.getContext('2d');x.filter='grayscale(1) contrast(1.4)';x.drawImage(c,0,0,g.width,g.height);
- const w=await Tesseract.createWorker('eng',1,{logger:m=>{if(m.status&&m.progress!=null)say('Reading label: '+m.status+' '+Math.round(m.progress*100)+'%')}});
+ const w=await Tesseract.createWorker('eng',1,{...(TESS_LOCAL?{workerPath:TESS_DIR+'worker.min.js',corePath:TESS_DIR,langPath:TESS_DIR}:{}),logger:m=>{if(m.status&&m.progress!=null)say('Reading label: '+m.status+' '+Math.round(m.progress*100)+'%')}});
  try{await w.setParameters({tessedit_pageseg_mode:'11',preserve_interword_spaces:'1'});const r=await w.recognize(g);return r.data.text}finally{w.terminate()}}
 async function csScan(inp){const f=inp.files[0];inp.value='';if(!f)return;const msg=$('#csmsg'),say=t=>{if(msg)msg.textContent=t};say('Reading label...');
  let bm;try{bm=await createImageBitmap(f,{imageOrientation:'from-image'})}catch{return say('Could not open that photo.')}
