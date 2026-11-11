@@ -45,6 +45,8 @@ header h1 small{display:block;font:400 11px system-ui,sans-serif;letter-spacing:
 .fcard .ic{font-size:32px;width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(32,144,208,.14);flex:none}
 .fcard b{font:600 18px Georgia,'Times New Roman',serif;display:block}.fcard small{color:var(--mut);display:block;margin-top:3px;font-size:14px;line-height:1.3}
 .fcard .go{margin-left:auto;font-size:30px;color:var(--ac);flex:none}
+.fcard.fold{border-left-color:var(--ac)}.fcard.fold .ic{background:rgba(18,74,138,.12)}.fcard .cnt{font-weight:600;color:var(--ac);margin-top:5px}
+.fhead{grid-column:1/-1;display:flex;align-items:center;gap:12px;flex-wrap:wrap}.fhead b{font:600 20px Georgia,'Times New Roman',serif}
 .steps{display:flex;margin:0 0 16px;position:relative}
 .steps:before{content:"";position:absolute;left:10%;right:10%;top:15px;height:3px;background:var(--bd)}
 .st{position:relative;flex:1;text-align:center;font-size:12px;color:var(--mut)}
@@ -664,8 +666,23 @@ const FM=[[/notice of rights/i,'📜','Protection of abused persons - notice of 
 [/solicit|request for info|records?/i,'🗂️','Request a report or records','Solicite um relatório ou registros'],
 [/declara|statement/i,'✍️','Give a written statement','Faça uma declaração por escrito'],
 [/trespass|proibi/i,'🚫','Notice banning someone from your property','Aviso que proíbe a entrada em uma propriedade']];
+const FOLDERS=[
+['mv','🚗','Motor Vehicle','Veículos','Crash, inventory, lockout and car seat forms','Acidente, inventário, veículo trancado e cadeirinha',/crash|inventory|lockout|trancad|car seat|cps check/i],
+['prop','🎒','Lost & Found Property','Objetos perdidos e encontrados','Lost and found property reports','Relatórios de objetos perdidos e encontrados',/found|encontrad|lost|perdid/i],
+['stmt','✍️','Statements & Consent','Declarações e consentimento','Voluntary statement, consent to search, decline to prosecute','Declaração, consentimento, recusa em prosseguir',/statement|declara|consent|decline|prosecut|recusa/i],
+['ord','🛡️','Orders & Notices','Ordens e avisos','209A, notice of rights and trespass','209A, aviso de direitos e proibição de entrada',/209a|abuse prevention|notice of rights|trespass|proibi/i],
+['det','📋','Details','Serviços policiais (detail)','Detail requests and pay vouchers','Pedidos de detail e comprovantes',/detail|voucher/i],
+['other','🗂️','Other Forms','Outros formulários','Everything else','Outros formulários',/.^/]];
+let openFld=null;
+const fldOf=nm=>(FOLDERS.find(x=>x[0]!=='other'&&x[6].test(nm))||FOLDERS[FOLDERS.length-1])[0];
+function openFolder(k){if(k&&!openFld)try{history.pushState({fld:k},'')}catch{}else if(!k&&openFld&&history.state&&history.state.fld){history.back();return}openFld=k;render();const h=document.querySelector(k?'.fhead':'.cards');if(h)h.scrollIntoView({block:'start',behavior:'smooth'})}
+addEventListener('popstate',()=>{if(openFld&&view==='home'){openFld=null;render()}});
+const formCard=([f,i])=>{const nm=f.name.replace(/\.pdf$/i,''),m=FM.find(x=>x[0].test(nm))||[0,'📄','Tap to start','Toque para começar'];return`<button class="fcard" onclick="openForm(${i})"><span class="ic">${m[1]}</span><span><b>${e(nm)}</b><small>${LANG==='pt'?m[3]:m[2]}</small></span><span class="go">›</span></button>`};
 const formCards=()=>{const l=forms.map((f,i)=>[f,i]).filter(([f])=>(f.lang||'en')===LANG).sort((x,y)=>x[0].name.localeCompare(y[0].name));if(!l.length)return'<p class="mut">No forms loaded yet. Staff: tap “Staff setup” to import PDFs and add officers.</p>';
- return l.map(([f,i])=>{const nm=f.name.replace(/\.pdf$/i,''),m=FM.find(x=>x[0].test(nm))||[0,'📄','Tap to start','Toque para começar'];return`<button class="fcard" onclick="openForm(${i})"><span class="ic">${m[1]}</span><span><b>${e(nm)}</b><small>${LANG==='pt'?m[3]:m[2]}</small></span><span class="go">›</span></button>`}).join('')};
+ const pt=LANG==='pt',by={};l.forEach(x=>{const k=fldOf(x[0].name.replace(/\.pdf$/i,''));(by[k]=by[k]||[]).push(x)});
+ const fd=openFld&&by[openFld]?FOLDERS.find(x=>x[0]===openFld):null;
+ if(fd)return`<div class="fhead"><button class="alt sm" onclick="openFolder(null)">‹ ${pt?'Todas as pastas':'All folders'}</button><b>${fd[1]} ${pt?fd[3]:fd[2]}</b></div>`+by[fd[0]].map(formCard).join('');
+ return FOLDERS.filter(x=>by[x[0]]).map(x=>{const n=by[x[0]].length;return`<button class="fcard fold" onclick="openFolder('${x[0]}')"><span class="ic">${x[1]}</span><span><b>${pt?x[3]:x[2]}</b><small>${pt?x[5]:x[4]}</small><small class="cnt">📁 ${n} ${pt?(n>1?'formulários':'formulário'):(n>1?'forms':'form')}</small></span><span class="go">›</span></button>`}).join('')};
 function tickClock(){const d=$('#cdate'),t=$('#ctime');if(!d||!t)return;const n=new Date(),loc=LANG==='pt'?'pt-BR':'en-US';
  d.textContent=n.toLocaleDateString(loc,{weekday:'long',year:'numeric',month:'long',day:'numeric'});t.textContent=n.toLocaleTimeString(loc,{hour:'numeric',minute:'2-digit'})}
 setInterval(tickClock,1000);
