@@ -4,7 +4,7 @@ tpdofficerv2 was merged into it on Nov 3 and again on Nov 24, 2026.
 
 ADDRESSES
   GitHub Pages:  https://jgoeckel13-collab.github.io/tpdofficer/
-  Cloudflare:    the tpd-officer worker loads this repo's GitHub Pages copy.
+  (The Cloudflare tpd-officer worker was deleted Nov 24, 2026. GitHub Pages is the only address.)
 
 PUT ON GITHUB PAGES
   1. Upload everything in this folder (including .nojekyll) to the top level of the repository.
