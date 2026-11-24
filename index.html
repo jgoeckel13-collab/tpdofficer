@@ -96,10 +96,10 @@ function render(){
  <label>Department CC email (optional)</label><input type="email" id="cc" value="${e(cc)}" onchange="if(!session)return;cc=this.value;ls.set('cc',cc)"></div>
  <button onclick="logout()">Done &amp; log out</button>`}
  else if(view==='fill'){const t=e(cur.name.replace(/\.pdf$/i,''));
- if(listMode||!fields.length){a.innerHTML=`<div class="card"><h3 style="margin-top:0">${t}</h3>${pdfjsDoc?'<button class="alt sm" onclick="listMode=false;render()">Show form view</button>':''}
+ if(listMode||!fields.length){a.innerHTML=`<div class="card"><h3 style="margin-top:0">${t}</h3>${scanBar()}${pdfjsDoc?'<button class="alt sm" onclick="listMode=false;render()">Show form view</button>':''}
  ${fields.length?fields.map((f,i)=>fieldHtml(f,i)).join(''):'<p>This PDF has no fillable fields. Please ask staff to load a fillable version.</p>'}
  ${photoCard()}<div class="row navb"><button class="alt" onclick="go('home')">Cancel</button>${fields.length?'<button onclick="go(\'review\')">Next: Review</button>':''}</div></div>`;document.querySelectorAll('.lsig').forEach(c=>initPad(c))}
- else{a.innerHTML=`<div class="card" style="padding:10px"><div class="row" style="margin:0;justify-content:space-between"><b>${t}</b><span><button class="alt sm" onclick="setZoom(-.5)">−</button> <button class="alt sm" onclick="setZoom(.5)">＋</button> <button class="alt sm" onclick="listMode=true;render()">List view</button></span></div><p class="mut" style="margin:6px 0 0">Tap a highlighted box on the form to fill it in.</p></div>
+ else{a.innerHTML=`<div class="card" style="padding:10px"><div class="row" style="margin:0;justify-content:space-between"><b>${t}</b><span><button class="alt sm" onclick="setZoom(-.5)">−</button> <button class="alt sm" onclick="setZoom(.5)">＋</button> <button class="alt sm" onclick="listMode=true;render()">List view</button></span></div><p class="mut" style="margin:6px 0 0">Tap a highlighted box on the form to fill it in.</p>${scanBar()}</div>
  <div id="pages"></div>${photoCard(1)}<div class="stk"><div class="card ed" id="ed"></div><div class="row navb"><button class="alt" onclick="go('home')">Cancel</button><button onclick="go('review')">Next: Review</button></div></div>`;
  drawPages().catch(()=>{listMode=true;render()})}}
  else if(view==='review'){a.innerHTML=`<div class="card"><h3 style="margin-top:0">Review your form</h3><p class="mut">Check that everything is correct before you sign.</p><div class="row" style="margin:0 0 8px"><button class="alt sm" onclick="rvZ(-.5)">−</button><button class="alt sm" onclick="rvZ(.5)">＋</button></div><div id="rvbox"><p class="mut" id="rvmsg">Preparing your copy…</p></div><p id="rverr" style="color:#c0392b"></p><div class="row navb"><button class="alt" onclick="go('fill')">Back to edit</button><button id="rvgo" onclick="${noSignForm(cur)?'finish()':'go(\'sign\')'}" disabled>${noSignForm(cur)?'Looks good — finish':'Looks good — continue to sign'}</button></div></div>`;showReview()}
@@ -802,8 +802,141 @@ function pdSvcClear(){ls.set('mailsvc',{});$('#svU').value='';$('#svK').value=''
 async function pdSvcTest(){if(!pdSvcSave())return;const to=prompt('Send a test email to:');if(!to)return;const m=$('#svM');m.textContent='Sending...';
  try{await pdSend({kind:'test',to:[to.trim()]});m.textContent='Test email sent to '+to.trim()+'. Check that inbox (and junk).'}catch(x){m.textContent='Test failed: '+x.message}}
 /* ==== end step 5 additions ==== */
+/* ---- scan a driver's license, VIN or plate into the form (officer app; everything is read on this tablet, nothing is sent) ---- */
+const SC_TEXT=f=>f&&f.t==='text';
+const scWhere=f=>{const w=f.widgets&&f.widgets[0];return w?{p:w.p,x:w.x+w.w/2,y:w.y+w.h/2}:null};
+const scPrefix=n=>{const m=/^\s*(V\s?\d|Vehicle\s?\d|Driver\s?\d|Operator\s?\d|Party\s?\d)\b/i.exec(n);return m?m[1].replace(/\s/g,'').toUpperCase():''};
+/* each item a scan can fill: which field names fit it */
+const SC_RULES={
+ name:{re:/name|reporting person|^owner$|v\d owner|operator/i,not:/officer|oic|technician|foreman|contractor|witness|child|business|location|seat|model|billing|call taken|tow|town|agency|in control|print\)|officers|reporting officer/i},
+ dob:{re:/birth|\bdob\b|nascimento/i},
+ street:{re:/address|endere/i,not:/email|billing|property\)|owner'?s? name\/address|island|na ilha/i},
+ city:{re:/^city$|\bcity\b|cidade/i,not:/state|zip/i},
+ cityStateZip:{re:/city.*state.*zip|cidade.*estado.*cep/i},
+ state:{re:/^state$|\bstate\b|estado/i,not:/license|plate|zip|city/i},
+ zip:{re:/zip|\bcep\b/i,not:/city|state/i},
+ licNum:{re:/licen[cs]e (number|no|#)|license$|operator'?s? license|lic\.? ?#/i,not:/state|plate/i},
+ licState:{re:/licen[cs]e state/i},
+ vin:{re:/\bvin\b|vehicle identification/i},
+ year:{re:/\byear\b/i,not:/date|birth/i},
+ plate:{re:/plate|registration|placa/i,not:/state/i}};
+function scCandidates(item){const r=SC_RULES[item];return fields.map((f,i)=>({f,i})).filter(({f})=>SC_TEXT(f)&&r.re.test(f.name)&&!(r.not&&r.not.test(f.name)))}
+/* best field for an item: same V1/V2 group as the field the officer tapped, then the nearest one on the page */
+function scGuess(item,used){const c=scCandidates(item).filter(x=>!used.has(x.i));if(!c.length)return -1;const a=fields[af],ap=a?scPrefix(a.name):'',aw=a?scWhere(a):null;
+ const score=x=>{let s=0;const w=scWhere(x.f);if(ap&&scPrefix(x.f.name)&&scPrefix(x.f.name)!==ap)s+=1e6;if(aw&&w)s+=Math.abs(w.p-aw.p)*5000+Math.hypot(w.x-aw.x,w.y-aw.y);if(values[x.f.name])s+=300;return s};
+ c.sort((p,q)=>score(p)-score(q));return c[0].i}
+const scTitle=s=>String(s||'').toLowerCase().replace(/(^|[\s\-'])([a-z])/g,(m,a,b)=>a+b.toUpperCase());
+/* AAMVA driver's license barcode (PDF417 on the back of the license) */
+function parseLicense(raw){const t=String(raw).replace(/\r/g,'\n'),g=code=>{const m=new RegExp('(?:^|\\n|DL|ID)'+code+'([^\\n]*)').exec(t);return m?m[1].trim():''};
+ if(!/ANSI|AAMVA|\nDAQ|DLDAQ|DAQ/.test(t))return null;
+ let first=g('DAC'),mid=g('DAD'),last=g('DCS');if(!first&&g('DCT')){const p=g('DCT').split(/[ ,]+/);first=p[0];mid=p.slice(1).join(' ')}
+ if(!last&&g('DAB'))last=g('DAB');if(/^(NONE|UNAVL)$/i.test(mid))mid='';
+ const dobRaw=g('DBB').replace(/\D/g,'');let dob='';if(dobRaw.length===8)dob=/^(19|20)/.test(dobRaw)?dobRaw.slice(0,4)+'-'+dobRaw.slice(4,6)+'-'+dobRaw.slice(6):dobRaw.slice(4)+'-'+dobRaw.slice(0,2)+'-'+dobRaw.slice(2,4); /* US: MMDDCCYY, Canada: CCYYMMDD */
+ const zip=g('DAK').replace(/[^0-9]/g,'').slice(0,5),st=g('DAJ').slice(0,2).toUpperCase(),city=scTitle(g('DAI'));
+ const street=scTitle([g('DAG'),g('DAH')].filter(Boolean).join(' '));
+ const out={name:scTitle([first,mid,last].filter(Boolean).join(' ')),dob,street,city,state:st,zip,cityStateZip:[city,[st,zip].filter(Boolean).join(' ')].filter(Boolean).join(', '),licNum:g('DAQ').toUpperCase(),licState:st};
+ return out.name||out.licNum?out:null}
+/* VIN from the barcode in the door jamb: 17 characters, check digit verified */
+const VIN_MAP={A:1,B:2,C:3,D:4,E:5,F:6,G:7,H:8,J:1,K:2,L:3,M:4,N:5,P:7,R:9,S:2,T:3,U:4,V:5,W:6,X:7,Y:8,Z:9};
+function vinOk(v){if(!/^[A-HJ-NPR-Z0-9]{17}$/.test(v))return false;const wt=[8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2];let s=0;for(let i=0;i<17;i++)s+=(/\d/.test(v[i])?+v[i]:VIN_MAP[v[i]])*wt[i];const c=s%11;return v[8]===(c===10?'X':String(c))}
+function vinYear(v){const k='ABCDEFGHJKLMNPRSTVWXY123456789'.indexOf(v[9]);if(k<0)return'';const now=new Date().getFullYear();let y=1980+k;while(y+30<=now+1)y+=30;return String(y)}
+function parseVin(raw){let v=String(raw).toUpperCase().replace(/[^A-Z0-9]/g,'');if(v.length===18&&v[0]==='I')v=v.slice(1);
+ const m=v.match(/[A-HJ-NPR-Z0-9]{17}/g)||[];const good=m.find(vinOk)||(v.length===17?v:'');if(!good)return null;return{vin:good,year:vinYear(good),checked:vinOk(good)}}
+/* camera: live barcode scanning when the tablet supports it, otherwise a photo */
+let scStream=null;
+function scClose(){if(scStream){scStream.getTracks().forEach(t=>t.stop());scStream=null}const o=$('#scov');if(o)o.remove()}
+function scOverlay(title,hint){scClose();const o=document.createElement('div');o.id='scov';o.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:14px;gap:10px;font:16px system-ui,sans-serif';
+ o.innerHTML=`<b style="font-size:19px">${e(title)}</b><div style="position:relative;width:min(640px,94vw)"><video id="scv" playsinline muted style="width:100%;border-radius:10px;background:#000;display:none"></video><div id="scbox" style="position:absolute;inset:18% 6%;border:3px solid #4caf50;border-radius:8px;display:none"></div></div><p id="scm" style="margin:0;text-align:center;max-width:560px">${e(hint)}</p><div class="row" style="justify-content:center"><button class="sm" id="scph" style="background:#fff;color:#124a8a">📷 Take a photo instead</button><button class="sm alt" style="color:#fff;border-color:#fff" onclick="scClose()">Cancel</button></div><input type="file" id="scfile" accept="image/*" capture="environment" hidden>`;
+ document.body.appendChild(o);return o}
+const scSay=t=>{const m=$('#scm');if(m)m.textContent=t};
+async function scBarcode(formats,title,hint,onText){if(!('BarcodeDetector'in window)){alert('This tablet cannot read barcodes. Type the details in instead.');return}
+ let det;try{const ok=await BarcodeDetector.getSupportedFormats();const f=formats.filter(x=>ok.includes(x));if(!f.length){alert('This tablet cannot read this kind of barcode. Type the details in instead.');return}det=new BarcodeDetector({formats:f})}catch{alert('This tablet cannot read barcodes. Type the details in instead.');return}
+ const o=scOverlay(title,hint),done=t=>{scClose();onText(t)};
+ const fromPhoto=async inp=>{const f=inp.files[0];inp.value='';if(!f)return;scSay('Reading the photo…');try{const bm=await createImageBitmap(f,{imageOrientation:'from-image'});const r=await det.detect(bm);if(r.length)return done(r[0].rawValue);scSay('No barcode found in that photo. Hold the tablet steady, fill the frame with the barcode, and try again.')}catch{scSay('Could not read that photo.')}};
+ o.querySelector('#scfile').onchange=ev=>fromPhoto(ev.target);o.querySelector('#scph').onclick=()=>o.querySelector('#scfile').click();
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){scSay(hint+' Tap "Take a photo".');return}
+ try{scStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false})}catch{scSay('The camera is not available. Tap "Take a photo instead".');return}
+ if(!document.getElementById('scov')){scClose();return}
+ const v=o.querySelector('#scv');v.srcObject=scStream;v.style.display='block';o.querySelector('#scbox').style.display='block';await v.play().catch(()=>{});
+ const loop=async()=>{if(!scStream||!document.getElementById('scov'))return;try{const r=await det.detect(v);if(r.length)return done(r[0].rawValue)}catch{}setTimeout(loop,250)};loop()}
+/* confirm what goes where, then fill */
+function scSheet(title,items,note){const used=new Set(),rows=items.filter(x=>x.v).map(x=>{const g=scGuess(x.k,used);if(g>=0)used.add(g);return{...x,g}});
+ if(!rows.length){alert('Nothing could be read. Type the details in instead.');return}
+ const opts=(k,g)=>'<option value="-1">— Don\'t fill —</option>'+fields.map((f,i)=>SC_TEXT(f)?`<option value="${i}" ${i===g?'selected':''}>${e(f.name)}</option>`:'').join('');
+ const o=document.createElement('div');o.id='scov';o.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:12px';
+ o.innerHTML=`<div class="card" style="width:min(620px,96vw);max-height:90vh;overflow:auto;margin:0"><h3 style="margin-top:0">${e(title)}</h3>${note?`<p class="mut" style="margin-top:0">${e(note)}</p>`:''}<p class="mut" style="margin-top:0">Check each line, then pick the box it goes in.</p>
+ ${rows.map((x,j)=>`<div style="border-top:1px solid var(--bd);padding:8px 0"><label style="margin:0">${e(x.l)}</label><input type="text" id="scv${j}" value="${e(x.v)}"><select id="scg${j}" style="margin-top:6px">${opts(x.k,x.g)}</select></div>`).join('')}
+ <div class="row"><button class="alt" onclick="scClose()">Cancel</button><button id="scfill">Fill the form</button></div></div>`;
+ document.body.appendChild(o);o.querySelector('#scfill').onclick=()=>{let n=0;rows.forEach((x,j)=>{const i=+$('#scg'+j).value,v=$('#scv'+j).value.trim();if(i<0||!v)return;const f=fields[i];if(f.kind==='date'){const iso=/^\d{4}-\d\d-\d\d$/.test(v)?v:toISO(v);values[f.name]=iso?fmtKind('date',iso,f.max):v}else values[f.name]=v;n++});
+  scClose();listMode?render():(paint(),edit());pdNoteOff(n?'Filled '+n+' box'+(n>1?'es':'')+'. Check them before you sign.':'Nothing was filled.')}}
+function pdNoteOff(t){let b=document.getElementById('scnote');if(!b){b=document.createElement('div');b.id='scnote';b.style.cssText='position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9998;max-width:92vw;padding:10px 16px;border-radius:10px;background:#0b1a55;color:#fff;font:600 15px system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.3)';document.body.appendChild(b)}b.textContent=t;clearTimeout(b._t);b._t=setTimeout(()=>b.remove(),5000)}
+function scanLicense(){scBarcode(['pdf417'],'Scan driver\'s license','Turn the license over and hold the wide barcode on the back inside the green box.',raw=>{const d=parseLicense(raw);
+ if(!d){alert('That barcode is not a driver\'s license. Try again or type the details in.');return}
+ const dobShow=d.dob?fmtDate(d.dob):'';const hasCity=scCandidates('city').length||scCandidates('cityStateZip').length;
+ const items=[{k:'name',l:'Name',v:d.name},{k:'dob',l:'Date of birth',v:dobShow,iso:d.dob},
+  /* separate city boxes on the form: street only; otherwise the whole address in one box */
+  hasCity?{k:'street',l:'Street address',v:d.street}:{k:'street',l:'Address',v:[d.street,d.cityStateZip].filter(Boolean).join(', ')},
+  {k:'cityStateZip',l:'City, state, ZIP',v:d.cityStateZip},{k:'city',l:'City',v:d.city},{k:'state',l:'State',v:d.state},{k:'zip',l:'ZIP',v:d.zip},{k:'licNum',l:'License number',v:d.licNum},{k:'licState',l:'License state',v:d.licState}];
+ /* when the form has separate city/state/ZIP boxes, offer the parts; otherwise the combined line */
+ const sep=scCandidates('city').length>0,comb=scCandidates('cityStateZip').length>0;
+ scSheet('Driver\'s license',items.filter(x=>!(x.k==='cityStateZip'&&!comb)&&!((x.k==='city'||x.k==='zip')&&!sep)&&!(x.k==='state'&&!scCandidates('state').length)&&!(x.k==='licState'&&!scCandidates('licState').length)),'Read from the license barcode on this tablet. Nothing was sent anywhere.')})}
+function scanVin(){scBarcode(['code_39','code_128','data_matrix','qr_code'],'Scan VIN barcode','Hold the VIN barcode (driver\'s door jamb or windshield sticker) inside the green box.',raw=>{const d=parseVin(raw);
+ if(!d){alert('No VIN found in that barcode. Try again or type the VIN in.');return}
+ scSheet('Vehicle (VIN)',[{k:'vin',l:'VIN',v:d.vin},{k:'year',l:'Model year (from the VIN)',v:d.year}],d.checked?'VIN check digit verified.':'Check this VIN: its check digit does not match (normal for some non-US vehicles).')})}
+function scanPlate(){const o=scOverlay('Read plate','Take a close, straight photo of the plate.');o.querySelector('#scph').textContent='📷 Take photo of plate';o.querySelector('#scph').onclick=()=>o.querySelector('#scfile').click();
+ o.querySelector('#scfile').onchange=async ev=>{const f=ev.target.files[0];ev.target.value='';if(!f)return;scSay('Reading the plate…');
+  try{const bm=await createImageBitmap(f,{imageOrientation:'from-image'}),k=Math.min(1,1600/Math.max(bm.width,bm.height)),c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);
+   let txt='';if(typeof TextDetector!=='undefined'){try{txt=(await new TextDetector().detect(c)).map(r=>r.rawValue).join('\n')}catch{}}
+   if(!txt)txt=await csOcr(c,scSay);
+   const skip=/^(MASSACHUSETTS|SPIRIT|AMERICA|EXPIRES?|[0-9]{2}|20[0-9]{2})$/;
+   const cand=[...new Set((txt.toUpperCase().replace(/[^A-Z0-9\s]/g,' ').replace(/\b([A-Z0-9]{1,4})\s([A-Z0-9]{2,4})\b/g,'$1$2 $1 $2').match(/\b[A-Z0-9]{2,8}\b/g)||[]))].filter(x=>!skip.test(x)&&/\d/.test(x)).sort((a,b)=>Math.abs(6-a.length)-Math.abs(6-b.length));
+   scClose();if(!cand.length){alert('No plate number could be read. Type it in instead.');return}
+   scSheet('Plate',[{k:'plate',l:'Plate number',v:cand[0]}],cand.length>1?'Other readings: '+cand.slice(1,4).join(', ')+'. Fix the number above if needed.':'Check the number against the plate.')}
+  catch(x){scSay('Could not read the plate: '+(x&&x.message?x.message:x))}}}
+/* buttons on the fill screen, only when the form has boxes they can fill */
+function scanBar(){if(!cur||!fields.length)return'';const lic=scCandidates('name').length&&(scCandidates('dob').length||scCandidates('licNum').length||scCandidates('street').length),vin=scCandidates('vin').length,pl=scCandidates('plate').length;
+ if(!lic&&!vin&&!pl)return'';return`<div class="row" style="margin:8px 0 0;gap:6px">${lic?'<button class="alt sm" onclick="scanLicense()">🪪 Scan license</button>':''}${vin?'<button class="alt sm" onclick="scanVin()">🚗 Scan VIN</button>':''}${pl?'<button class="alt sm" onclick="scanPlate()">🔢 Read plate</button>':''}<span class="mut" style="font-size:13px">Tap the box for the right person or vehicle first.</span></div>`}
+/* ---- unfinished forms: kept on this tablet up to 24 hours so an interrupted form can be finished later ---- */
+const DRAFT_DAY=24*3600*1000;let drafts=[],curDraftId='',draftResumed=false,draftSig='';
+const ddb=()=>new Promise((ok,no)=>{try{const q=indexedDB.open('pd_drafts_'+APP,1);q.onupgradeneeded=()=>q.result.createObjectStore('d',{keyPath:'id'});q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)}catch(x){no(x)}});
+async function dtx(mode,fn){try{const d=await ddb();return await new Promise((ok,no)=>{const t=d.transaction('d',mode),r=fn(t.objectStore('d'));t.oncomplete=()=>{d.close();ok(r&&r.result)};t.onerror=()=>{d.close();no(t.error)}})}catch(x){console.warn(x)}}
+async function draftLoad(){const all=(await dtx('readonly',s=>s.getAll()))||[],now=Date.now(),dead=all.filter(x=>now-x.ts>=DRAFT_DAY);
+ if(dead.length)await dtx('readwrite',s=>{dead.forEach(x=>s.delete(x.id))});drafts=all.filter(x=>now-x.ts<DRAFT_DAY).sort((a,b)=>b.ts-a.ts);if(view==='home')render()}
+function getDraft(){return null}
+function clearDraft(){const id=curDraftId;curDraftId='';draftSig='';if(id)dtx('readwrite',s=>s.delete(id)).then(draftLoad)}
+function saveDraft(force){if(!cur||!curDraftId||!(view==='fill'||view==='review'||view==='sign'))return;const sig=JSON.stringify(values)+'|'+photos.length;
+ if(!draftResumed&&sig===values0+'|0')return;if(!force&&sig===draftSig)return;draftSig=sig;
+ const rec={id:curDraftId,ts:Date.now(),form:cur.name,lang:LANG,af,values:JSON.parse(JSON.stringify(values)),photos:photos.map(p=>p.bytes)};dtx('readwrite',s=>s.put(rec)).then(()=>{const i=drafts.findIndex(x=>x.id===rec.id);if(i>=0)drafts[i]=rec;else drafts.unshift(rec)})}
+function draftLeave(){if(!curDraftId)return;const changed=draftResumed||JSON.stringify(values)!==values0||photos.length>0;
+ if(changed&&confirm('Keep this unfinished form on this tablet for up to 24 hours, to finish later?\n\nOK = keep it    Cancel = throw it away')){saveDraft(true);curDraftId='';draftSig='';setTimeout(draftLoad,300)}else clearDraft()}
+function resumeBanner(){if(!drafts.length)return'';const now=Date.now();
+ return`<div class="resume"><b>Unfinished forms</b> <span class="mut" style="font-size:14px">· kept on this tablet for 24 hours</span>${drafts.map(d=>{const left=Math.max(0,DRAFT_DAY-(now-d.ts)),h=Math.floor(left/3600000),m=Math.floor(left%3600000/60000);
+  return`<div class="row" style="justify-content:space-between;align-items:center;margin:8px 0"><div><b>${e(d.form.replace(/\.pdf$/i,''))}</b><br><span class="mut">Last changed ${e(new Date(d.ts).toLocaleString([],{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))} · deleted in ${h}h ${m}m${d.photos&&d.photos.length?' · '+d.photos.length+' photo'+(d.photos.length>1?'s':''):''}</span></div><div class="row" style="margin:0"><button class="sm" onclick="resumeDraft('${e(d.id)}')">Finish it</button><button class="alt sm" onclick="draftDel('${e(d.id)}')">Delete</button></div></div>`}).join('')}</div>`}
+async function resumeDraft(id){const d=drafts.find(x=>x.id===id);if(!d)return render();const i=forms.findIndex(f=>f.name===d.form);if(i<0){alert('That form is no longer on this tablet.');return}
+ if(d.lang&&d.lang!==LANG)setLang(d.lang);await openForm(i,d);photos=(d.photos||[]).map(b=>({bytes:b,url:URL.createObjectURL(new Blob([b],{type:'image/jpeg'}))}));const pb=$('#phbox');if(pb)pb.innerHTML=photoInner()}
+async function draftDel(id){if(!confirm('Delete this unfinished form?'))return;await dtx('readwrite',s=>s.delete(id));draftLoad()}
+{const _o=openForm;openForm=async function(i,restore){curDraftId=restore&&restore.id?restore.id:'d'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);draftResumed=!!(restore&&restore.id);draftSig='';return _o.apply(this,arguments)}}
+function go(v){if(v==='home'&&(view==='fill'||view==='review'||view==='sign'))draftLeave();if(v==='admin')v=APP==='officer'?'admin':!users.length?'setup':!session?'login':'admin';view=v;msg='';render();if(LANG==='pt')trTree(document.body,true)}
+/* photos count as a change worth keeping */
+{const _a=addPhotos;addPhotos=async function(){const r=await _a.apply(this,arguments);saveDraft(true);return r}}
+{const _r=rmPhoto;rmPhoto=function(){const r=_r.apply(this,arguments);saveDraft(true);return r}}
+draftLoad();setInterval(draftLoad,300000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)draftLoad()});
+
+/* ---- night mode: Auto (follows the tablet) / Day / Night. Night also dims the white form pages on screen (the PDF itself is unchanged) ---- */
+const THEMES=['auto','day','night'],THEME_LBL={auto:'🌓 Auto',day:'☀️ Day',night:'🌙 Night'};
+function applyTheme(t){const r=document.documentElement;if(t==='day')r.setAttribute('data-theme','light');else if(t==='night')r.setAttribute('data-theme','dark');else r.removeAttribute('data-theme');
+ if(t==='night')r.setAttribute('data-night','');else r.removeAttribute('data-night');const b=document.getElementById('thb');if(b)b.textContent=THEME_LBL[t];
+ const mc=document.querySelector('meta[name=theme-color]');if(mc)mc.content=t==='night'?'#05070d':'#1d4e89'}
+function cycleTheme(){const t=THEMES[(THEMES.indexOf(ls.get('theme','auto'))+1)%3];ls.set('theme',t);applyTheme(t);pdNoteOff(t==='night'?'Night mode: dark screen, dimmed form pages.':t==='day'?'Day mode.':'Auto: follows the tablet\'s light/dark setting.')}
+(function(){const st=document.createElement('style');st.textContent=`:root[data-night]{--bg:#05070d;--card:#0c121c;--tx:#c9d2df;--mut:#7d8aa0;--bd:#1f2a3b}
+:root[data-night] header{background:#05070d;box-shadow:none}
+:root[data-night] .pg{background:#111}:root[data-night] .pg canvas,:root[data-night] #rvbox canvas{filter:invert(.92) hue-rotate(180deg) brightness(.85)}
+:root[data-night] .fo{color:#ffe7a3;background:rgba(255,214,0,.10);border-color:#8a6d00}:root[data-night] .fo.done{background:rgba(76,175,80,.14);border-color:#2e7d32}
+:root[data-night] canvas#sig,:root[data-night] canvas.lsig,:root[data-night] canvas#fsig{filter:brightness(.7)}:root[data-night] img{filter:brightness(.8)}`;document.head.appendChild(st);
+ const hb=document.querySelector('header');if(hb){const b=document.createElement('button');b.id='thb';b.className='alt sm';b.style.cssText='color:#fff;border-color:rgba(255,255,255,.75);margin-left:auto;margin-right:8px';b.onclick=cycleTheme;const sb=hb.querySelector('button');hb.insertBefore(b,sb)}
+ applyTheme(ls.get('theme','auto'))})();
 /* ---- app version: shown at the bottom of every screen, and a notice after an update ---- */
-const APP_VER='20261124c',APP_NOTES='Security update: the app only runs its own code (plus the pinned label reader), Use my current location no longer sends your position anywhere unless you turn on address lookup, and imported forms that replace a built-in form stay replaced.';
+const APP_VER='20261124d',APP_NOTES='New: Scan license, Scan VIN and Read plate buttons fill the form for you; unfinished forms are kept on this tablet for 24 hours; Day/Night switch at the top (Night dims the form pages).';
 (function(){const el=document.createElement('p');el.id='appver';el.style.cssText='text-align:center;font-size:12px;color:var(--mut);margin:4px 0 18px';el.textContent='App version '+APP_VER;const mn=document.querySelector('main');if(mn)mn.after(el);
  let seen=null;try{seen=localStorage.getItem(NS+'seenVer');localStorage.setItem(NS+'seenVer',APP_VER)}catch{}
  if(!seen||seen===APP_VER)return;const b=document.createElement('div');b.id='updBanner';b.setAttribute('role','status');

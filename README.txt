@@ -1,5 +1,5 @@
 TISBURY PD OFFICER APP  (standalone, no server needed)
-Current version: 20261124c (shown at the bottom of the app; also VERSION in sw.js and APP_VER in index.html). This repo (tpdofficer) is the main copy.
+Current version: 20261124d (shown at the bottom of the app; also VERSION in sw.js and APP_VER in index.html). This repo (tpdofficer) is the main copy.
 tpdofficerv2 was merged into it on Nov 3 and again on Nov 24, 2026.
 
 ADDRESSES
@@ -23,6 +23,21 @@ RECENT FORMS
   Completed forms stay on the device for 24 hours, then are deleted automatically:
   at the 24-hour mark while the app is open, whenever the app is reopened, and (installed
   Android/Chrome app) by background clean-up. "Delete all now" on the home page clears them at once.
+
+SCANNING (on the fill screen, when the form has matching boxes)
+  Scan license: reads the barcode on the back of a driver's license (name, date of birth, address,
+  license number/state). Scan VIN: reads the VIN barcode in the door jamb (VIN and model year).
+  Read plate: photo of the plate. Everything is read on the tablet; nothing is sent anywhere.
+  Tap the box for the right person or vehicle first (e.g. V2 Operator name); then check each line
+  and the box it goes in before filling. Barcode reading needs Chrome on Android.
+
+UNFINISHED FORMS
+  Leaving a form asks whether to keep it. Kept forms (with their photos) are listed on the home
+  page for 24 hours, then deleted automatically.
+
+NIGHT MODE
+  The Auto / Day / Night button at the top. Night darkens the app and dims the white form pages on
+  screen; the saved PDF is unchanged.
 
 FORMS INCLUDED (grouped in folders on the home page)
   Motor Vehicle: Minor MV Crash Worksheet (photos), Motor Vehicle Inventory (photos),
