@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/ https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.1/ https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.1.1/; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.1.1/ https://cdn.jsdelivr.net/npm/@tesseract.js-data/ https://nominatim.openstreetmap.org; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#1d4e89"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png"><title>Tisbury PD Officer Portal</title>
 <script src="vendor/pdf-lib.min.js"></script>
 <script type="module">import*as P from "./vendor/pdf.min.mjs";window.pdfjsLib=P</script>
@@ -174,7 +175,7 @@ function formFolders(){const cen=typeof pdApi==='function',me=APP==='officer'?'o
  const note=app=>app===me?'':(app==='kiosk'?'Built-in kiosk forms are managed in the Kiosk app’s own Staff setup.':'Built-in officer forms are managed in the Officer app’s own Staff setup.');
  const hid=Object.keys(kindOv.__hidden||{}).length;
  return folderHtml(me,mk(me),'')+(hid?`<div class="row"><button class="alt sm" onclick="restoreForms()">Restore ${hid} removed built-in form${hid>1?'s':''}</button></div>`:'')}
-function restoreForms(){kindOv.__hidden={};ls.set('kinds',kindOv);forms=[...builtinForms(),...forms.filter(x=>!x.builtin)];render()}
+function restoreForms(){kindOv.__hidden={};ls.set('kinds',kindOv);const imp=new Set(forms.filter(x=>!x.builtin).map(x=>x.name));forms=[...builtinForms().filter(x=>!imp.has(x.name)),...forms.filter(x=>!x.builtin)];render()}
 async function delForm(i){if(!session)return go('admin');const f=forms[i];if(!f)return;
  if(!confirm('Remove "'+f.name.replace(/\.pdf$/i,'')+'"?'+(f.builtin?' You can bring it back with "Restore removed built-in forms".':'')))return;
  if(f.builtin){const h={...(kindOv.__hidden||{})};h[f.name]=1;kindOv.__hidden=h;ls.set('kinds',kindOv)}else await dbDel(f.name);forms.splice(i,1);render()}
@@ -556,7 +557,7 @@ function loadTess(){if(window.Tesseract)return Promise.resolve();return tessP||(
  await addJs('https://cdn.jsdelivr.net/npm/tesseract.js@'+TESS_V+'/dist/tesseract.min.js')})().catch(x=>{tessP=null;throw x}))}
 async function csOcr(c,say){await loadTess();say('Reading label (first use downloads the reader, about 15 MB - please wait)...');
  const g=document.createElement('canvas'),k=Math.max(1,2000/Math.max(c.width,c.height));g.width=Math.round(c.width*k);g.height=Math.round(c.height*k);const x=g.getContext('2d');x.filter='grayscale(1) contrast(1.4)';x.drawImage(c,0,0,g.width,g.height);
- const w=await Tesseract.createWorker('eng',1,{...(TESS_LOCAL?{workerPath:TESS_DIR+'worker.min.js',corePath:TESS_DIR,langPath:TESS_DIR}:{}),logger:m=>{if(m.status&&m.progress!=null)say('Reading label: '+m.status+' '+Math.round(m.progress*100)+'%')}});
+ const w=await Tesseract.createWorker('eng',1,{...(TESS_LOCAL?{workerPath:TESS_DIR+'worker.min.js',corePath:TESS_DIR,langPath:TESS_DIR}:{workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@v5.1.1/dist/worker.min.js',corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@v5.1.1',langPath:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int'}),logger:m=>{if(m.status&&m.progress!=null)say('Reading label: '+m.status+' '+Math.round(m.progress*100)+'%')}});
  try{await w.setParameters({tessedit_pageseg_mode:'11',preserve_interword_spaces:'1'});const r=await w.recognize(g);return r.data.text}finally{w.terminate()}}
 async function csScan(inp){const f=inp.files[0];inp.value='';if(!f)return;const msg=$('#csmsg'),say=t=>{if(msg)msg.textContent=t};say('Reading label...');
  let bm;try{bm=await createImageBitmap(f,{imageOrientation:'from-image'})}catch{return say('Could not open that photo.')}
@@ -615,8 +616,10 @@ async function resumeDraft(){const d=getDraft();if(!d)return render();const i=fo
 /* ---- location helper (officer app): current GPS and Google Maps picker ---- */
 const IS_OFFICER=()=>(typeof APP!=='undefined'&&APP==='officer')||(typeof MODE!=='undefined'&&MODE==='officer');
 const isLocField=n=>/\b(location|local|localiza[cç][aã]o)\b/i.test(n)&&!/date|time|name|data|hora|nome/i.test(n);
+const addrLookupOn=()=>ls.get('addrLookup',false)===true;
+function setAddrLookup(on){ls.set('addrLookup',!!on);locSay(on?'Address lookup is on. Your GPS position is sent to OpenStreetMap to find the street address.':'Address lookup is off. Only the GPS coordinates are filled in; nothing is sent anywhere.')}
 function locBtns(f){if(!IS_OFFICER()||f.t!=='text'||f.kind||!isLocField(f.name))return'';
- return`<div class="row"><button class="alt sm" onclick="useGps()">📍 Use my current location</button></div><p id="locmsg" class="mut" style="margin:4px 0 0"></p>`}
+ return`<div class="row"><button class="alt sm" onclick="useGps()">📍 Use my current location</button></div><label class="chk" style="font-size:14px"><input type="checkbox" ${addrLookupOn()?'checked':''} onchange="setAddrLookup(this.checked)"> Look up the street address (sends your GPS position to OpenStreetMap)</label><p id="locmsg" class="mut" style="margin:4px 0 0"></p>`}
 const locSay=t=>{const m=$('#locmsg');if(m)m.textContent=t||''};
 function setLoc(txt){const f=fields[af];if(!f)return;values[f.name]=txt;paint();edit();const m=$('#edv');if(m)m.value=txt}
 const fmtLL=(lat,lng)=>lat.toFixed(5)+', '+lng.toFixed(5);
@@ -633,8 +636,8 @@ async function revGeocode(lat,lng){
  try{const c=new AbortController(),t=setTimeout(()=>c.abort(),8000),r=await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&lat='+lat+'&lon='+lng,{signal:c.signal,headers:{Accept:'application/json'}});clearTimeout(t);
   if(r.ok){const d=await r.json(),a=d.address||{},st=[a.house_number,a.road].filter(Boolean).join(' '),town=a.town||a.village||a.city||a.hamlet||a.suburb||'',out=[st,town].filter(Boolean).join(', ');if(out)return out;if(d.display_name)return stripUS(d.display_name)}}catch{}
  return''}
-async function useGps(){locSay('Getting your location…');try{const p=await gpsFix();locSay('Looking up the address…');const addr=await revGeocode(p.lat,p.lng);
-  setLoc(addr||fmtLL(p.lat,p.lng));locSay(addr?'Location set from GPS (accuracy about '+Math.round(p.acc)+' m). Edit if needed.':'Address lookup was not available, so the GPS coordinates were entered ('+Math.round(p.acc)+' m accuracy).')}catch(x){locSay(x.message)}}
+async function useGps(){locSay('Getting your location…');try{const p=await gpsFix();if(addrLookupOn())locSay('Looking up the address…');const addr=addrLookupOn()?await revGeocode(p.lat,p.lng):'';
+  setLoc(addr||fmtLL(p.lat,p.lng));locSay(addr?'Location set from GPS (accuracy about '+Math.round(p.acc)+' m). Edit if needed.':addrLookupOn()?'Address lookup was not available, so the GPS coordinates were entered ('+Math.round(p.acc)+' m accuracy).':'GPS coordinates entered ('+Math.round(p.acc)+' m accuracy). Type the street address if you want one.')}catch(x){locSay(x.message)}}
 let mpState=null;
 async function openMapPicker(){closeMapPicker();const ov=document.createElement('div');ov.id='mpov';ov.style.cssText='position:fixed;inset:0;z-index:9999;background:#fff;display:flex;flex-direction:column';
  ov.innerHTML=`<div style="padding:10px;display:flex;gap:8px;align-items:center;border-bottom:1px solid #ccd"><input id="mps" type="text" placeholder="Search an address or place" style="flex:1;margin:0"><button class="sm" id="mpsb">Search</button></div><div id="mpm" style="flex:1;min-height:200px;display:flex;align-items:center;justify-content:center;padding:16px;text-align:center" class="mut">Loading map…</div><p id="mpa" class="mut" style="margin:6px 12px;min-height:1.3em"></p><div class="row" style="padding:0 12px 12px"><button class="alt" onclick="closeMapPicker()">Cancel</button><button class="alt sm" id="mpg">📍 My location</button><button id="mpok" disabled>Use this location</button></div>`;document.body.appendChild(ov);
@@ -800,12 +803,12 @@ async function pdSvcTest(){if(!pdSvcSave())return;const to=prompt('Send a test e
  try{await pdSend({kind:'test',to:[to.trim()]});m.textContent='Test email sent to '+to.trim()+'. Check that inbox (and junk).'}catch(x){m.textContent='Test failed: '+x.message}}
 /* ==== end step 5 additions ==== */
 /* ---- app version: shown at the bottom of every screen, and a notice after an update ---- */
-const APP_VER='20261124b',APP_NOTES='The app version now shows at the bottom of the screen. Recent forms are deleted right at 24 hours, and there is a new Delete all now button.';
+const APP_VER='20261124c',APP_NOTES='Security update: the app only runs its own code (plus the pinned label reader), Use my current location no longer sends your position anywhere unless you turn on address lookup, and imported forms that replace a built-in form stay replaced.';
 (function(){const el=document.createElement('p');el.id='appver';el.style.cssText='text-align:center;font-size:12px;color:var(--mut);margin:4px 0 18px';el.textContent='App version '+APP_VER;const mn=document.querySelector('main');if(mn)mn.after(el);
  let seen=null;try{seen=localStorage.getItem(NS+'seenVer');localStorage.setItem(NS+'seenVer',APP_VER)}catch{}
  if(!seen||seen===APP_VER)return;const b=document.createElement('div');b.id='updBanner';b.setAttribute('role','status');
  b.style.cssText='position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:99990;width:min(560px,92vw);box-sizing:border-box;background:#0a8f4a;color:#fff;border-radius:12px;padding:12px 16px;font:15px/1.4 system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.3)';
  b.innerHTML='<b>✓ Updated to version '+e(APP_VER)+'</b> <span style="opacity:.85">(was '+e(seen)+')</span>'+(APP_NOTES?'<div style="margin-top:4px">'+e(APP_NOTES)+'</div>':'')+'<div style="text-align:right;margin-top:8px"><button class="sm" style="background:#fff;color:#0a8f4a">OK</button></div>';
  b.querySelector('button').onclick=()=>b.remove();document.body.appendChild(b);setTimeout(()=>{try{b.remove()}catch{}},20000)})();
-dbAll().then(r=>{const bn=new Set(BUILTIN.map(x=>x.name));forms=[...builtinForms(),...r.filter(x=>!bn.has(x.name))];render()});render();
+dbAll().then(r=>{const imp=new Set(r.map(x=>x.name));forms=[...builtinForms().filter(x=>!imp.has(x.name)),...r];render()});render();
 </script></body></html>
