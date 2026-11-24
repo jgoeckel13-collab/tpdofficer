@@ -1,5 +1,5 @@
 TISBURY PD OFFICER APP  (standalone, no server needed)
-Current version: 20261124a (see sw.js). This repo (tpdofficer) is the main copy.
+Current version: 20261124b (shown at the bottom of the app; also VERSION in sw.js and APP_VER in index.html). This repo (tpdofficer) is the main copy.
 tpdofficerv2 was merged into it on Nov 3 and again on Nov 24, 2026.
 
 ADDRESSES
@@ -12,7 +12,8 @@ PUT ON GITHUB PAGES
   3. On the device: browser menu > Install app / Add to Home screen.
 
 UPDATING
-  Upload the new files, then change VERSION on line 2 of sw.js. Devices reload on their own.
+  Upload the new files, then change VERSION on line 2 of sw.js AND APP_VER (plus APP_NOTES, the "what's new" text) in index.html.
+  Devices reload on their own and show "Updated to version ..." once.
 
 EMAIL
   The officer app never sends email by itself. Email officer opens the device's mail app

@@ -799,5 +799,13 @@ function pdSvcClear(){ls.set('mailsvc',{});$('#svU').value='';$('#svK').value=''
 async function pdSvcTest(){if(!pdSvcSave())return;const to=prompt('Send a test email to:');if(!to)return;const m=$('#svM');m.textContent='Sending...';
  try{await pdSend({kind:'test',to:[to.trim()]});m.textContent='Test email sent to '+to.trim()+'. Check that inbox (and junk).'}catch(x){m.textContent='Test failed: '+x.message}}
 /* ==== end step 5 additions ==== */
+/* ---- app version: shown at the bottom of every screen, and a notice after an update ---- */
+const APP_VER='20261124b',APP_NOTES='The app version now shows at the bottom of the screen. Recent forms are deleted right at 24 hours, and there is a new Delete all now button.';
+(function(){const el=document.createElement('p');el.id='appver';el.style.cssText='text-align:center;font-size:12px;color:var(--mut);margin:4px 0 18px';el.textContent='App version '+APP_VER;const mn=document.querySelector('main');if(mn)mn.after(el);
+ let seen=null;try{seen=localStorage.getItem(NS+'seenVer');localStorage.setItem(NS+'seenVer',APP_VER)}catch{}
+ if(!seen||seen===APP_VER)return;const b=document.createElement('div');b.id='updBanner';b.setAttribute('role','status');
+ b.style.cssText='position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:99990;width:min(560px,92vw);box-sizing:border-box;background:#0a8f4a;color:#fff;border-radius:12px;padding:12px 16px;font:15px/1.4 system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.3)';
+ b.innerHTML='<b>✓ Updated to version '+e(APP_VER)+'</b> <span style="opacity:.85">(was '+e(seen)+')</span>'+(APP_NOTES?'<div style="margin-top:4px">'+e(APP_NOTES)+'</div>':'')+'<div style="text-align:right;margin-top:8px"><button class="sm" style="background:#fff;color:#0a8f4a">OK</button></div>';
+ b.querySelector('button').onclick=()=>b.remove();document.body.appendChild(b);setTimeout(()=>{try{b.remove()}catch{}},20000)})();
 dbAll().then(r=>{const bn=new Set(BUILTIN.map(x=>x.name));forms=[...builtinForms(),...r.filter(x=>!bn.has(x.name))];render()});render();
 </script></body></html>
