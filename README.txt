@@ -1,5 +1,5 @@
 TISBURY PD OFFICER APP  (standalone, no server needed)
-Current version: 20261124d (shown at the bottom of the app; also VERSION in sw.js and APP_VER in index.html). This repo (tpdofficer) is the main copy.
+Current version: 20261124e (shown at the bottom of the app; also VERSION in sw.js and APP_VER in index.html). This repo (tpdofficer) is the main copy.
 tpdofficerv2 was merged into it on Nov 3 and again on Nov 24, 2026.
 
 ADDRESSES

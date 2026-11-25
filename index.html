@@ -23,6 +23,7 @@ canvas{width:100%;height:170px;border:2px dashed var(--bd);border-radius:10px;ba
 iframe{width:100%;height:60vh;border:1px solid var(--bd);border-radius:8px;background:#fff}
 .li{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--bd)}
 .pg{position:relative;background:#fff;margin:0 0 12px;box-shadow:0 1px 6px rgba(0,0,0,.3)}#pages{overflow-x:auto}
+.pg canvas,#rvbox canvas,#heldpg canvas{touch-action:manipulation;border:0;border-radius:0}
 .fld{border:1px solid var(--bd);border-radius:10px;padding:4px 10px 8px;margin:10px 0;background:var(--card)}.fld>summary,.sub>summary{cursor:pointer;font-weight:600;margin:6px 0 4px}.sub{margin:4px 0 4px 16px}
 .fo{position:absolute;box-sizing:border-box;border:1.5px solid #e0a800;background:rgba(255,235,59,.3);border-radius:2px;cursor:pointer;overflow:hidden;white-space:nowrap;color:#000;font-family:Helvetica,Arial,sans-serif;display:flex;align-items:center;padding:0 3px}
 .fo.ml{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;align-items:flex-start;padding:2px 4px;line-height:1.25}
@@ -936,7 +937,7 @@ function cycleTheme(){const t=THEMES[(THEMES.indexOf(ls.get('theme','auto'))+1)%
  const hb=document.querySelector('header');if(hb){const b=document.createElement('button');b.id='thb';b.className='alt sm';b.style.cssText='color:#fff;border-color:rgba(255,255,255,.75);margin-left:auto;margin-right:8px';b.onclick=cycleTheme;const sb=hb.querySelector('button');hb.insertBefore(b,sb)}
  applyTheme(ls.get('theme','auto'))})();
 /* ---- app version: shown at the bottom of every screen, and a notice after an update ---- */
-const APP_VER='20261124d',APP_NOTES='New: Scan license, Scan VIN and Read plate buttons fill the form for you; unfinished forms are kept on this tablet for 24 hours; Day/Night switch at the top (Night dims the form pages).';
+const APP_VER='20261124e',APP_NOTES='Fixed: you can now scroll a form by swiping anywhere on the page, not just at the edges.';
 (function(){const el=document.createElement('p');el.id='appver';el.style.cssText='text-align:center;font-size:12px;color:var(--mut);margin:4px 0 18px';el.textContent='App version '+APP_VER;const mn=document.querySelector('main');if(mn)mn.after(el);
  let seen=null;try{seen=localStorage.getItem(NS+'seenVer');localStorage.setItem(NS+'seenVer',APP_VER)}catch{}
  if(!seen||seen===APP_VER)return;const b=document.createElement('div');b.id='updBanner';b.setAttribute('role','status');
