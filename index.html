@@ -895,7 +895,7 @@ function scanPlate(){const o=scOverlay('Read plate','Take a close, straight phot
    scSheet('Plate',[{k:'plate',l:'Plate number',v:cand[0]}],cand.length>1?'Other readings: '+cand.slice(1,4).join(', ')+'. Fix the number above if needed.':'Check the number against the plate.')}
   catch(x){scSay('Could not read the plate: '+(x&&x.message?x.message:x))}}}
 /* buttons on the fill screen, only when the form has boxes they can fill */
-function scanBar(){if(!cur||!fields.length)return'';const lic=scCandidates('name').length&&(scCandidates('dob').length||scCandidates('licNum').length||scCandidates('street').length),vin=scCandidates('vin').length,pl=scCandidates('plate').length;
+function scanBar(){if(!cur||!fields.length||/209A|258E/i.test(cur.name))return''; /* court order forms (209A, 258E): no scanning */const lic=scCandidates('name').length&&(scCandidates('dob').length||scCandidates('licNum').length||scCandidates('street').length),vin=scCandidates('vin').length,pl=scCandidates('plate').length;
  if(!lic&&!vin&&!pl)return'';return`<div class="row" style="margin:8px 0 0;gap:6px">${lic?'<button class="alt sm" onclick="scanLicense()">🪪 Scan license</button>':''}${vin?'<button class="alt sm" onclick="scanVin()">🚗 Scan VIN</button>':''}${pl?'<button class="alt sm" onclick="scanPlate()">🔢 Read plate</button>':''}<span class="mut" style="font-size:13px">Tap the box for the right person or vehicle first.</span></div>`}
 /* ---- unfinished forms: kept on this tablet up to 24 hours so an interrupted form can be finished later ---- */
 const DRAFT_DAY=24*3600*1000;let drafts=[],curDraftId='',draftResumed=false,draftSig='';
@@ -937,7 +937,7 @@ function cycleTheme(){const t=THEMES[(THEMES.indexOf(ls.get('theme','auto'))+1)%
  const hb=document.querySelector('header');if(hb){const b=document.createElement('button');b.id='thb';b.className='alt sm';b.style.cssText='color:#fff;border-color:rgba(255,255,255,.75);margin-left:auto;margin-right:8px';b.onclick=cycleTheme;const sb=hb.querySelector('button');hb.insertBefore(b,sb)}
  applyTheme(ls.get('theme','auto'))})();
 /* ---- app version: shown at the bottom of every screen, and a notice after an update ---- */
-const APP_VER='20261124e',APP_NOTES='Fixed: you can now scroll a form by swiping anywhere on the page, not just at the edges.';
+const APP_VER='20261124f',APP_NOTES='Fixed: forms scroll when you swipe anywhere on the page. The scan buttons no longer appear on 209A and 258E forms.';
 (function(){const el=document.createElement('p');el.id='appver';el.style.cssText='text-align:center;font-size:12px;color:var(--mut);margin:4px 0 18px';el.textContent='App version '+APP_VER;const mn=document.querySelector('main');if(mn)mn.after(el);
  let seen=null;try{seen=localStorage.getItem(NS+'seenVer');localStorage.setItem(NS+'seenVer',APP_VER)}catch{}
  if(!seen||seen===APP_VER)return;const b=document.createElement('div');b.id='updBanner';b.setAttribute('role','status');

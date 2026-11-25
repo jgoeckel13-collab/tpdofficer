@@ -1,5 +1,5 @@
 TISBURY PD OFFICER APP  (standalone, no server needed)
-Current version: 20261124e (shown at the bottom of the app; also VERSION in sw.js and APP_VER in index.html). This repo (tpdofficer) is the main copy.
+Current version: 20261124f (shown at the bottom of the app; also VERSION in sw.js and APP_VER in index.html). This repo (tpdofficer) is the main copy.
 tpdofficerv2 was merged into it on Nov 3 and again on Nov 24, 2026.
 
 ADDRESSES
@@ -28,6 +28,7 @@ SCANNING (on the fill screen, when the form has matching boxes)
   Scan license: reads the barcode on the back of a driver's license (name, date of birth, address,
   license number/state). Scan VIN: reads the VIN barcode in the door jamb (VIN and model year).
   Read plate: photo of the plate. Everything is read on the tablet; nothing is sent anywhere.
+  Not shown on the 209A and 258E forms.
   Tap the box for the right person or vehicle first (e.g. V2 Operator name); then check each line
   and the box it goes in before filling. Barcode reading needs Chrome on Android.
 
